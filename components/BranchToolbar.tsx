@@ -135,19 +135,17 @@ export function BranchToolbar({
           </div>
         ) : null}
       </div>
-
-      <div className="flex shrink-0 items-center gap-0.5 text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="size-7"
+          className="h-7 px-2"
           disabled={isBusy}
           aria-label={syncTitle}
           onClick={onSync}
         >
           <Icon name="RotateCcw" className="size-3.5" />
-          <span className="ml-0.5 font-mono text-[10px] tabular-nums">
+          <span className="ml-1 font-mono text-[10px] tabular-nums">
             ↑{count.ahead} ↓{count.behind}
           </span>
         </Button>
