@@ -8,13 +8,13 @@ export default definePluginApp((app) => {
 
   app.slots.experimental_threadHeaderAction({
     id: "git-panel-toggle",
-    title: "Git panel",
+    title: "Git",
     component: () => <GitHeaderAction />,
   });
 
   app.slots.sidebarFooterAction({
     id: "git-panel-toggle",
-    title: "Git panel",
+    title: "Git",
     icon: "GitBranch",
     run: toggleRailOpen,
   });

@@ -5,7 +5,7 @@
  * testable under plain `node --test`.
  */
 
-import type { GitChange } from "../contract";
+import type { GitChange, GitStash } from "../contract";
 
 /**
  * Parses `git status --porcelain=v1 -uall` output into panel changes.
@@ -72,4 +72,65 @@ export function parseRefs(refsOut: string): RefsInfo {
     }
   }
   return { branch: sawHead ? branch : "", branches, remoteBranches };
+}
+
+/**
+ * Parses `git stash list` output into stash entries.
+ *
+ * `git stash list` prints one line per stash as `stash@{N}: <description>`,
+ * where the description is one of:
+ *  - `WIP on <branch>: <hash> <subject>` — an auto stash (no `-m`): the
+ *    short hash of the commit it was built on, then that commit's subject.
+ *  - `On <branch>: <message>` — a stash created with `-m <message>`.
+ *  - anything else — kept verbatim as the message with an empty branch.
+ *
+ * A detached HEAD is reported by git as `On (no branch): <message>` or
+ * `WIP on (no branch): <hash> <subject>`; the sentinel "(no branch)" token
+ * has no real branch behind it, so it collapses to `branch: ""`.
+ */
+export function parseStash(stashOut: string): GitStash[] {
+  const entries: GitStash[] = [];
+
+  for (const line of stashOut.split("\n")) {
+    if (line.trim() === "") continue;
+
+    const m = line.match(/^stash@\{(\d+)\}:\s*(.*)$/);
+    if (!m) continue;
+
+    const index = parseInt(m[1], 10);
+    const ref = `stash@{${m[1]}}`;
+    const desc = m[2];
+
+    let branch: string;
+    let message: string;
+    let hash: string | undefined;
+
+    const wip = desc.match(/^WIP on (.+?): ([0-9a-f]{7,40}) (.+)$/);
+    if (wip) {
+      branch = wip[1];
+      hash = wip[2];
+      message = wip[3];
+    } else {
+      const on = desc.match(/^On (.+?): (.+)$/);
+      if (on) {
+        branch = on[1];
+        message = on[2];
+      } else {
+        // Unknown shape: keep the description, clear the branch.
+        branch = "";
+        message = desc;
+      }
+    }
+
+    // Detached HEAD — "(no branch)" is a sentinel, not a real branch.
+    if (/^\(no branch\b/i.test(branch)) branch = "";
+
+    entries.push(
+      hash !== undefined
+        ? { ref, index, branch, message, hash }
+        : { ref, index, branch, message },
+    );
+  }
+
+  return entries;
 }

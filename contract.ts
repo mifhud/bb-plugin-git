@@ -110,6 +110,35 @@ export const repoListSchema = z.object({
   pending: z.boolean(),
 });
 export type RepoList = z.infer<typeof repoListSchema>;
+export const gitStashSchema = z.object({
+  /** Reflog-style ref, e.g. `stash@{0}` — the form git commands take. */
+  ref: z.string(),
+  /** Reverse position: 0 is the newest stash, increments toward older. */
+  index: z.number().int().nonnegative(),
+  /** Originating branch, `""` when it can't be parsed (e.g. detached HEAD). */
+  branch: z.string(),
+  /** Stash message — a commit subject for auto stashes, the `-m` text otherwise. */
+  message: z.string(),
+  /** Short subject hash, present on auto (`WIP on`) stashes. */
+  hash: z.string().optional(),
+});
+export type GitStash = z.infer<typeof gitStashSchema>;
+
+export const gitStashListSchema = z.object({
+  stashes: z.array(gitStashSchema),
+});
+
+export const stashFileSchema = z.object({
+  file: z.string(),
+  additions: z.number().optional(),
+  deletions: z.number().optional(),
+});
+export type GitStashFile = z.infer<typeof stashFileSchema>;
+
+export const stashFilesSchema = z.object({
+  files: z.array(stashFileSchema),
+});
+export type StashFiles = z.infer<typeof stashFilesSchema>;
 
 /**
  * Every mutation the panel can issue. The server whitelists these names; the
@@ -133,6 +162,10 @@ export const gitActionSchema = z.enum([
   "reset_commit",
   "merge_commit",
   "rebase_commit",
+  "stash_push",
+  "stash_pop",
+  "stash_drop",
+  "stash_apply",
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
 
@@ -192,6 +225,32 @@ export const rpcContract = defineRpcContract({
     }).strict(),
     output: gitStatusSchema,
   },
+  /** Stashed entries for one repo (push/pop/drop mutate this list). */
+  stashList: {
+    input: z.object({
+      rootId: z.string().min(1),
+      repo: z.string().max(4096),
+    }).strict(),
+    output: gitStashListSchema,
+  },
+  /** File list + diff for one stash entry. */
+  stashFiles: {
+    input: z.object({
+      rootId: z.string().min(1),
+      repo: z.string().max(4096),
+      stash: z.string().max(64),
+    }).strict(),
+    output: stashFilesSchema,
+  },
+  stashFileDiff: {
+    input: z.object({
+      rootId: z.string().min(1),
+      repo: z.string().max(4096),
+      stash: z.string().max(64),
+      file: z.string().max(4096),
+    }).strict(),
+    output: commitDiffResultSchema,
+  },
   /** Every stage/unstage/commit/branch/sync mutation. */
   act: {
     input: z
@@ -205,6 +264,7 @@ export const rpcContract = defineRpcContract({
         hash: z.string().max(64).optional(),
         /** soft | mixed | hard — only read for reset_commit. */
         mode: z.enum(["soft", "mixed", "hard"]).optional(),
+        stash: z.string().max(64).optional(),
       })
       .strict(),
     output: actionResultSchema,

@@ -6,6 +6,7 @@ import { fetchWorkingFileDiff } from "./src/git-diff";
 import { fetchFileDiff, fetchGitCommits } from "./src/git-log";
 import { discoveredRepos, rescanRepos, startRepoScan } from "./src/git-repos";
 import { readStatus } from "./src/git-status";
+import { fetchStashFileDiff, fetchStashFiles, readStashList } from "./src/git-stash";
 import { gitSyncCount, refreshRemoteRefs } from "./src/git-sync";
 import { resolveRoot } from "./src/roots";
 import { listRootChoices, workspaceForThread } from "./src/workspace";
@@ -108,6 +109,33 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         repo: input.repo,
       };
     },
+    stashList: async (input) => {
+      const rootPath = await requireLocalRoot(input.rootId);
+      const targetDir = resolveRepoDir(rootPath, input.repo);
+      return { stashes: await readStashList(targetDir) };
+    },
+    stashFiles: async (input) => {
+      const rootPath = await requireLocalRoot(input.rootId);
+      const targetDir = resolveRepoDir(rootPath, input.repo);
+      const files = await fetchStashFiles(targetDir, input.stash);
+      return { files };
+    },
+    stashFileDiff: async (input) => {
+      try {
+        const rootPath = await requireLocalRoot(input.rootId);
+        const targetDir = resolveRepoDir(rootPath, input.repo);
+        const diff = await fetchStashFileDiff(targetDir, input.stash, input.file);
+        if (diff === "") {
+          return { ok: false as const, error: `No diff available for ${input.file} in ${input.stash}.` };
+        }
+        return { ok: true as const, diff, file: input.file };
+      } catch (cause) {
+        return {
+          ok: false as const,
+          error: cause instanceof Error ? cause.message : String(cause),
+        };
+      }
+    },
     act: async (input) => {
       const rootPath = await requireLocalRoot(input.rootId);
       const targetDir = resolveRepoDir(rootPath, input.repo);
@@ -118,6 +146,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         ...(input.branch !== undefined ? { branch: input.branch } : {}),
         ...(input.hash !== undefined ? { hash: input.hash } : {}),
         ...(input.mode !== undefined ? { mode: input.mode } : {}),
+        ...(input.stash !== undefined ? { stash: input.stash } : {}),
       });
     },
     fileDiff: async (input) => {

@@ -10,6 +10,7 @@ import { CommitBox } from "@/components/CommitBox";
 import { ConfirmDialog, PromptDialog } from "@/components/GitDialogs";
 import { DiffView } from "@/components/DiffView";
 import { HistoryView } from "@/components/HistoryView";
+import { StashList } from "@/components/StashList";
 import { RailResizeHandle } from "@/components/RailResizeHandle";
 import { acquireRailInset, syncRailInset } from "@/lib/rail-inset";
 import { usePortalScopeProps } from "@/lib/portal-scope";
@@ -68,15 +69,17 @@ export function GitRail() {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [committing, setCommitting] = useState(false);
   const [manualTick, setManualTick] = useState(0);
 
   // Tab / detail / drafts.
-  const [tab, setTab] = useState<"changes" | "history">("changes");
+  const [tab, setTab] = useState<"changes" | "history" | "stash">("changes");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   const [message, setMessage] = useState("");
   const [diffFile, setDiffFile] = useState<GitChange | null>(null);
   const [diffStaged, setDiffStaged] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
+  const [stashToken, setStashToken] = useState(0);
 
   // Dialogs.
   const [confirm, setConfirm] = useState<{
@@ -215,6 +218,7 @@ export function GitRail() {
       branch?: string;
       hash?: string;
       mode?: "soft" | "mixed" | "hard";
+      stash?: string;
     }): Promise<boolean> => {
       if (rootId === null) return false;
       setBusy(true);
@@ -224,6 +228,7 @@ export function GitRail() {
           setError(null);
           await readStatus();
           setHistoryToken((token) => token + 1);
+          setStashToken((token) => token + 1);
           return true;
         }
         setError(result.error);
@@ -249,7 +254,9 @@ export function GitRail() {
   };
 
   const commitNow = (): void => {
+    setCommitting(true);
     void runAction({ action: "commit", message }).then((ok) => {
+      setCommitting(false);
       if (ok) setMessage("");
     });
   };
@@ -298,6 +305,17 @@ export function GitRail() {
         />
       );
     }
+    if (tab === "stash") {
+      return (
+        <StashList
+          rootId={rootId}
+          repo={repo}
+          runAction={runAction}
+          actionBusy={busy}
+          refreshToken={stashToken}
+        />
+      );
+    }
     if (diffFile !== null) {
       return (
         <DiffView
@@ -316,6 +334,7 @@ export function GitRail() {
           hasStagedChanges={stagedCount > 0}
           stagedCount={stagedCount}
           isBusy={busy}
+          isCommitting={committing}
           onCommit={commitNow}
         />
         <ChangesList
@@ -350,7 +369,7 @@ export function GitRail() {
       {...portalScopeProps}
       className="fixed bottom-0 right-0 top-0 z-40 flex flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground"
       style={{ display: railOpen ? "flex" : "none", width: compact ? "100vw" : `${railWidthPx}px` }}
-      aria-label="Git panel"
+      aria-label="Git"
     >
       {compact ? null : <RailResizeHandle />}
 
@@ -458,7 +477,7 @@ export function GitRail() {
 
       {isRepo ? (
         <div className="flex shrink-0 items-center border-b border-sidebar-border px-1.5 py-1">
-          {(["changes", "history"] as const).map((name) => (
+          {(["changes", "history", "stash"] as const).map((name) => (
             <button
               key={name}
               type="button"

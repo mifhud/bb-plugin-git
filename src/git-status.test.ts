@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePorcelain, parseRefs } from "./git-parse.ts";
+import { parsePorcelain, parseRefs, parseStash } from "./git-parse.ts";
 
 test("porcelain columns decide staged vs unstaged", () => {
   const out = [
@@ -52,4 +52,73 @@ test("detached HEAD reports no marked branch", () => {
   const info = parseRefs("refs/heads/main\tmain\t");
   assert.equal(info.branch, "");
   assert.deepEqual(info.branches, ["main"]);
+});
+
+test("parseStash parses a WIP-on-branch stash with hash and subject", () => {
+  const stashes = parseStash("stash@{0}: WIP on feature/x: a1b2c34 Add login page");
+  assert.equal(stashes.length, 1);
+  assert.deepEqual(stashes[0], {
+    ref: "stash@{0}",
+    index: 0,
+    branch: "feature/x",
+    message: "Add login page",
+    hash: "a1b2c34",
+  });
+});
+
+test("parseStash parses an On-branch stash with message only, no hash", () => {
+  const stashes = parseStash("stash@{1}: On master: fix typo");
+  assert.equal(stashes.length, 1);
+  assert.deepEqual(stashes[0], {
+    ref: "stash@{1}",
+    index: 1,
+    branch: "master",
+    message: "fix typo",
+  });
+  assert.equal(stashes[0].hash, undefined);
+});
+
+test("parseStash keeps colons in On-branch messages intact", () => {
+  const stashes = parseStash("stash@{0}: On master: WIP: my changes");
+  assert.equal(stashes.length, 1);
+  assert.deepEqual(stashes[0], {
+    ref: "stash@{0}",
+    index: 0,
+    branch: "master",
+    message: "WIP: my changes",
+  });
+  assert.equal(stashes[0].hash, undefined);
+});
+
+test("parseStash parses a WIP on (no branch) stash", () => {
+  const stashes = parseStash("stash@{0}: WIP on (no branch): 1ea879c first commit");
+  assert.equal(stashes.length, 1);
+  assert.deepEqual(stashes[0], {
+    ref: "stash@{0}",
+    index: 0,
+    branch: "",
+    message: "first commit",
+    hash: "1ea879c",
+  });
+});
+
+test("parseStash returns [] for empty output", () => {
+  assert.deepEqual(parseStash(""), []);
+  assert.deepEqual(parseStash("   \n  \n"), []);
+});
+
+test("parseStash parses multiple entries preserving their index", () => {
+  const out = [
+    "stash@{0}: WIP on master: b27c649 first commit",
+    "stash@{1}: On master: fix typo",
+    "stash@{2}: WIP on (no branch): 1ea879c first commit",
+  ].join("\n");
+
+  const stashes = parseStash(out);
+  assert.equal(stashes.length, 3);
+  assert.equal(stashes[0].index, 0);
+  assert.equal(stashes[1].index, 1);
+  assert.equal(stashes[2].index, 2);
+  assert.equal(stashes[0].message, "first commit");
+  assert.equal(stashes[1].message, "fix typo");
 });

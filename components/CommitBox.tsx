@@ -12,6 +12,7 @@ export function CommitBox({
   hasStagedChanges,
   stagedCount,
   isBusy,
+  isCommitting,
   onCommit,
 }: {
   message: string;
@@ -19,6 +20,7 @@ export function CommitBox({
   hasStagedChanges: boolean;
   stagedCount: number;
   isBusy: boolean;
+  isCommitting: boolean;
   onCommit: () => void;
 }) {
   const canCommit = hasStagedChanges && message.trim() !== "" && !isBusy;
@@ -41,7 +43,7 @@ export function CommitBox({
           }
         }}
         rows={2}
-        placeholder="Commit message (⌘↵ to commit)"
+        placeholder="Commit message"
         aria-label="Commit message"
         className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
       />
@@ -50,7 +52,7 @@ export function CommitBox({
           {hint}
         </span>
         <Button type="button" size="sm" className="h-7 shrink-0 px-3 text-xs" disabled={!canCommit} onClick={onCommit}>
-          {isBusy ? "Committing…" : "Commit"}
+          {isCommitting ? "Committing…" : "Commit"}
         </Button>
       </div>
     </div>

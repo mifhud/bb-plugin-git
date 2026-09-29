@@ -397,21 +397,47 @@ function TreeRows({
         return (
           <div key={node.id}>
             <div
-              className="flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-state-hover"
+              className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
               style={indent}
               onClick={() => toggle(node.id)}
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
-                if (event.key === "Enter") toggle(node.id);
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggle(node.id);
+                }
               }}
             >
-              <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
-                {isOpen ? "▾" : "▸"}
+              <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
+                  {isOpen ? "▾" : "▸"}
+                </span>
+                <span className="truncate font-medium text-foreground">{node.name}</span>
+                <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
+                  {node.changeCount}
+                </span>
               </span>
-              <span className="truncate font-medium">{node.name}</span>
-              <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
-                {node.changeCount}
+              <span
+                className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                onClick={(event) => event.stopPropagation()}
+                role="none"
+              >
+                {!isStaged ? (
+                  <SectionAction
+                    title="Stage folder changes"
+                    glyph="+"
+                    disabled={isBusy}
+                    onClick={() => onStage(node.path)}
+                  />
+                ) : (
+                  <SectionAction
+                    title="Unstage folder changes"
+                    glyph="−"
+                    disabled={isBusy}
+                    onClick={() => onUnstage(node.path)}
+                  />
+                )}
               </span>
             </div>
             {isOpen ? render(node.children, depth + 1) : null}

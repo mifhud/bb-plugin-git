@@ -16,7 +16,8 @@ import { fileDiffSchema, type FileDiffData, type rpcContract } from "../contract
 
 export type DiffTarget =
   | { kind: "working"; file: string; staged: boolean; status?: string }
-  | { kind: "commit"; hash: string; file: string };
+  | { kind: "commit"; hash: string; file: string }
+  | { kind: "stash"; stash: string; file: string };
 
 /** Inline tints: guaranteed to paint regardless of the host stylesheet. */
 const ADD_STYLE = { backgroundColor: "rgba(16, 185, 129, 0.13)" };
@@ -45,15 +46,15 @@ export function DiffView({
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [fullContext, setFullContext] = useState(false);
 
-  const isCommit = target.kind === "commit";
   const file = target.file;
   // Primitive key: a fresh `target` object arrives every render of the rail,
   // so the effect must depend on WHAT it points at, not on the object.
   const targetKey =
     target.kind === "working"
       ? `working:${target.file}:${target.staged}:${target.status ?? ""}`
-      : `commit:${target.hash}:${target.file}`;
-
+      : target.kind === "stash"
+        ? `stash:${target.stash}:${target.file}`
+        : `commit:${target.hash}:${target.file}`;
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -78,6 +79,12 @@ export function DiffView({
             deletions: parsed.data.deletions ?? 0,
             status: parsed.data.status,
           });
+        } else if (target.kind === "stash") {
+          const result = await rpc.call("stashFileDiff", { rootId, repo, stash: target.stash, file: target.file });
+          if (cancelled) return;
+          if (!result.ok) throw new Error(result.error);
+          setDiff(result.diff);
+          setMeta(null);
         } else {
           const result = await rpc.call("commitDiff", { rootId, repo, hash: target.hash, file: target.file });
           if (cancelled) return;
@@ -155,7 +162,7 @@ export function DiffView({
           >
             WS
           </button>
-          {!isCommit ? (
+          {target.kind === "working" ? (
             <button
               type="button"
               title="Show the whole file instead of the changed hunks"

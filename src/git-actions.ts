@@ -9,8 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { GitAction } from "../contract";
-import { invalidateRemoteRefs, markRemoteRefsFresh } from "./git-sync";
-import { expectOk, gitOk, runGit } from "./shell";
+import { invalidateRemoteRefs, markRemoteRefsFresh } from "./git-sync.ts";
+import { expectOk, gitOk, runGit } from "./shell.ts";
 
 export interface ActInput {
   action: GitAction;
@@ -19,6 +19,7 @@ export interface ActInput {
   branch?: string;
   hash?: string;
   mode?: "soft" | "mixed" | "hard";
+  stash?: string;
 }
 
 export type ActOutcome = { ok: true } | { ok: false; error: string };
@@ -55,6 +56,16 @@ function assertHash(hash: string): string {
   const trimmed = hash.trim();
   if (!/^[0-9a-fA-F]{4,64}$/.test(trimmed)) {
     throw new Error(`Not a valid commit hash: ${hash}`);
+  }
+  return trimmed;
+}
+
+/** Stashed entries reference reflog slots `stash@{N}` only — a shape strict
+ * enough to bar options and refnames from reaching git as an argument. */
+export function assertStashRef(stash: string): string {
+  const trimmed = stash.trim();
+  if (!/^stash@\{\d+\}$/.test(trimmed)) {
+    throw new Error(`Not a valid stash ref: ${stash}`);
   }
   return trimmed;
 }
@@ -182,6 +193,28 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
     case "rebase_commit":
       await expectOk(["rebase", assertHash(requireText(input.hash, "hash"))], cwd);
       return;
+    case "stash_push": {
+      const message = input.message?.trim() ?? "";
+      const args = ["stash", "push"];
+      if (message !== "") args.push("-m", message);
+      await expectOk(args, cwd);
+      return;
+    }
+    case "stash_pop": {
+      const ref = assertStashRef(requireText(input.stash, "stash"));
+      await expectOk(["stash", "pop", ref], cwd);
+      return;
+    }
+    case "stash_drop": {
+      const ref = assertStashRef(requireText(input.stash, "stash"));
+      await expectOk(["stash", "drop", ref], cwd);
+      return;
+    }
+    case "stash_apply": {
+      const ref = assertStashRef(requireText(input.stash, "stash"));
+      await expectOk(["stash", "apply", ref], cwd);
+      return;
+    }
   }
 }
 

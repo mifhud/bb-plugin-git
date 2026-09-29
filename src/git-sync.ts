@@ -8,7 +8,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { gitOk, runGit } from "./shell";
+import { gitOk, runGit } from "./shell.ts";
 
 /** How long a fetch attempt — success or failure — is trusted. */
 const FETCH_TTL_MS = 60_000;
