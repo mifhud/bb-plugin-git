@@ -144,7 +144,7 @@ export function BranchToolbar({
           aria-label={syncTitle}
           onClick={onSync}
         >
-          <Icon name="RotateCcw" className="size-3.5" />
+          <Icon name="ArrowReloadHorizontal" className="size-3.5" />
           <span className="ml-1 font-mono text-[10px] tabular-nums">
             ↑{count.ahead} ↓{count.behind}
           </span>
@@ -158,7 +158,7 @@ export function BranchToolbar({
           aria-label="Refresh status"
           onClick={onRefresh}
         >
-          <Icon name="ArrowReloadHorizontal" className="size-3.5" />
+          <Icon name="RotateCcw" className="size-3.5" />
         </Button>
       </div>
     </div>
