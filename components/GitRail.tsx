@@ -113,6 +113,10 @@ export function GitRail() {
 
   /* -------------------------------- root choices --------------------- */
   const pinnedThreadId = selectedId?.startsWith("thread:") ? selectedId.slice(7) : null;
+  /** Thread the selector last followed, so the follow branch fires only on a
+   *  real thread switch — not on re-renders from pinning — like
+   *  bb-plugin-file-tree. */
+  const lastFollowedThread = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     setLoadingRoots(true);
@@ -122,6 +126,23 @@ export function GitRail() {
         if (cancelled) return;
         setChoices(next);
         setRootError(null);
+        // Opening a thread follows that thread's checkout: switching threads
+        // re-points the selection, mirroring bb-plugin-file-tree. The pinned
+        // choice is what New Thread keeps — there is no thread to follow.
+        // git prefers the thread workspace (a local checkout) over a project
+        // source, since git only runs against roots on this machine.
+        if (threadId !== null && lastFollowedThread.current !== threadId) {
+          lastFollowedThread.current = threadId;
+          const follow = next.find((choice) => choice.id === `thread:${threadId}`)
+            ?? next.find((choice) => choice.projectId !== null && choice.projectId === projectId);
+          if (follow !== undefined) {
+            if (follow.id !== selectedId) {
+              setSelectedId(follow.id);
+              writePinnedRoot(follow.id);
+            }
+            return;
+          }
+        }
         if (selectedId === null) {
           const preferred =
             next.find((choice) => choice.id === `thread:${threadId}`) ??
@@ -142,8 +163,8 @@ export function GitRail() {
     return () => {
       cancelled = true;
     };
-    // selectedId is read for the first-pick only; including it would re-run
-    // the listing on every pin change.
+    // selectedId is read for the follow and first-pick branches, but kept out of
+    // the deps so pinning does not re-run the root listing every time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rpc, threadId, projectId, pinnedThreadId, refreshCount]);
 
