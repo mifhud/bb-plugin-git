@@ -374,10 +374,7 @@ export function GitRail() {
       {compact ? null : <RailResizeHandle />}
 
       <div className="flex h-[48px] shrink-0 items-center justify-between border-b border-sidebar-border pl-3 pr-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <Icon name="GitBranch" className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-medium text-muted-foreground">Git</span>
-        </span>
+        <span className="truncate text-sm font-medium text-muted-foreground">Git</span>
         <Button
           type="button"
           variant="ghost"
@@ -386,7 +383,7 @@ export function GitRail() {
           aria-label="Hide git panel"
           onClick={() => writeStoredOpen(false)}
         >
-          <Icon name="X" className="size-4" />
+          <Icon name="GitBranch" className="size-4" />
         </Button>
       </div>
 

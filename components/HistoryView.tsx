@@ -181,7 +181,14 @@ export function HistoryView({
             size="icon"
             className="size-6 shrink-0"
             aria-label="Copy commit hash"
-            onClick={() => void navigator.clipboard?.writeText(selected.hash).catch(() => undefined)}
+            onClick={() => {
+              void rpc
+                .call("copyTextToClipboard", { text: selected.hash })
+                .then((result) => {
+                  if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
+                })
+                .catch(() => setError("Could not copy to the clipboard."));
+            }}
           >
             <Icon name="Copy" className="size-3.5" />
           </Button>

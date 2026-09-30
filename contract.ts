@@ -303,6 +303,13 @@ export const rpcContract = defineRpcContract({
     }).strict(),
     output: commitDiffResultSchema,
   },
+  /** Copy a short string (commit hash, stash ref) to the system clipboard.
+   *  Done server-side — navigator.clipboard is blocked under WSL, so this
+   *  mirrors bb-plugin-file-tree's clipboard RPC. */
+  copyTextToClipboard: {
+    input: z.object({ text: z.string().max(2000) }).strict(),
+    output: z.object({ ok: z.boolean(), message: z.string().optional() }),
+  },
   /** Diagnostics from the browser, so DOM behaviour shows up in bb.log. */
   clientLog: {
     input: z.object({ message: z.string().max(2000) }).strict(),

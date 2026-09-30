@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { getGitStatusInfo } from "@/lib/git-status-display";
 import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
 import type { GitChange } from "../contract";
@@ -249,6 +250,56 @@ function SectionAction({
   );
 }
 
+/** Right-click menu shared by file and folder rows. Only the actions that fit
+ *  the row's staged state are offered — never a disabled placeholder — and when
+ *  the panel is busy the row renders its plain (non-menu) trigger. */
+function RowContextMenu({
+  target,
+  isStaged,
+  disabled,
+  onStage,
+  onUnstage,
+  onDiscard,
+  children,
+}: {
+  target: string;
+  isStaged: boolean;
+  disabled: boolean;
+  onStage: (file: string) => void;
+  onUnstage: (file: string) => void;
+  onDiscard: (file: string) => void;
+  children: React.ReactNode;
+}) {
+  if (disabled) return <>{children}</>;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        {!isStaged ? (
+          <>
+            <ContextMenuItem onSelect={() => onStage(target)}>
+              Stage Changes
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onDiscard(target)}
+              className="text-destructive focus:text-destructive"
+            >
+              Discard Changes
+            </ContextMenuItem>
+          </>
+        ) : (
+          <ContextMenuItem onSelect={() => onUnstage(target)}>
+            Unstage Changes
+          </ContextMenuItem>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 /** One file row: status letter, name, directory, and its own actions. */
 function FileRow({
   change,
@@ -272,7 +323,7 @@ function FileRow({
   const fileName = parts.pop() ?? change.file;
   const dirPath = parts.join("/");
 
-  return (
+  const row = (
     <div
       className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
       onClick={() => onOpenDiff(change, isStaged)}
@@ -326,6 +377,20 @@ function FileRow({
         )}
       </span>
     </div>
+  );
+
+
+  return (
+    <RowContextMenu
+      target={change.file}
+      isStaged={isStaged}
+      disabled={disabled}
+      onStage={onStage}
+      onUnstage={onUnstage}
+      onDiscard={onDiscard}
+    >
+      {row}
+    </RowContextMenu>
   );
 }
 
@@ -396,50 +461,59 @@ function TreeRows({
         const isOpen = effective.has(node.id);
         return (
           <div key={node.id}>
-            <div
-              className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
-              style={indent}
-              onClick={() => toggle(node.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  toggle(node.id);
-                }
-              }}
+            <RowContextMenu
+              target={node.path}
+              isStaged={isStaged}
+              disabled={isBusy}
+              onStage={onStage}
+              onUnstage={onUnstage}
+              onDiscard={onDiscard}
             >
-              <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
-                  {isOpen ? "▾" : "▸"}
-                </span>
-                <span className="truncate font-medium text-foreground">{node.name}</span>
-                <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
-                  {node.changeCount}
-                </span>
-              </span>
-              <span
-                className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={(event) => event.stopPropagation()}
-                role="none"
+              <div
+                className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+                style={indent}
+                onClick={() => toggle(node.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggle(node.id);
+                  }
+                }}
               >
-                {!isStaged ? (
-                  <SectionAction
-                    title="Stage folder changes"
-                    glyph="+"
-                    disabled={isBusy}
-                    onClick={() => onStage(node.path)}
-                  />
-                ) : (
-                  <SectionAction
-                    title="Unstage folder changes"
-                    glyph="−"
-                    disabled={isBusy}
-                    onClick={() => onUnstage(node.path)}
-                  />
-                )}
-              </span>
-            </div>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
+                    {isOpen ? "▾" : "▸"}
+                  </span>
+                  <span className="truncate font-medium text-foreground">{node.name}</span>
+                  <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
+                    {node.changeCount}
+                  </span>
+                </span>
+                <span
+                  className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={(event) => event.stopPropagation()}
+                  role="none"
+                >
+                  {!isStaged ? (
+                    <SectionAction
+                      title="Stage folder changes"
+                      glyph="+"
+                      disabled={isBusy}
+                      onClick={() => onStage(node.path)}
+                    />
+                  ) : (
+                    <SectionAction
+                      title="Unstage folder changes"
+                      glyph="−"
+                      disabled={isBusy}
+                      onClick={() => onUnstage(node.path)}
+                    />
+                  )}
+                </span>
+              </div>
+            </RowContextMenu>
             {isOpen ? render(node.children, depth + 1) : null}
           </div>
         );

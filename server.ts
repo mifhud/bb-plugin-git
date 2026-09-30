@@ -10,6 +10,7 @@ import { fetchStashFileDiff, fetchStashFiles, readStashList } from "./src/git-st
 import { gitSyncCount, refreshRemoteRefs } from "./src/git-sync";
 import { resolveRoot } from "./src/roots";
 import { listRootChoices, workspaceForThread } from "./src/workspace";
+import { copyTextToClipboard } from "./src/git-clipboard";
 
 export { rpcContract } from "./contract";
 
@@ -181,6 +182,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         };
       }
     },
+    copyTextToClipboard: ({ text }) => copyTextToClipboard(text),
     clientLog: ({ message }) => {
       bb.log.info(`client: ${message}`);
       return { ok: true };

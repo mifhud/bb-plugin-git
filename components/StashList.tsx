@@ -154,7 +154,11 @@ export function StashList({
             size="icon"
             className="size-6 shrink-0"
             aria-label={`Copy ${expandedStash.ref}`}
-            onClick={() => void navigator.clipboard?.writeText(expandedStash.ref).catch(() => undefined)}
+            onClick={() => {
+              void rpc
+                .call("copyTextToClipboard", { text: expandedStash.ref })
+                .catch(() => undefined);
+            }}
           >
             <Icon name="Copy" className="size-3.5" />
           </Button>
