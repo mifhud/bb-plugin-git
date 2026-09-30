@@ -2,22 +2,24 @@
  * Flat change list → folder tree — ported from ompchamber's
  * `client/hooks/workspace/git-tree.ts` (the pure builder only; expansion
  * state lives in the component that renders it).
+ *
+ * Generic over `T extends { file: string }` so the same builder powers the
+ * Changes tree (GitChange[]) and the History/Stash file lists
+ * (GitCommitFile[] / GitStashFile[]).
  */
 
-import type { GitChange } from "../contract";
-
-export interface GitTreeNode {
+export interface GitTreeNode<T = unknown> {
   id: string;
   name: string;
   path: string;
   type: "folder" | "file";
-  change?: GitChange;
-  children: GitTreeNode[];
+  data?: T;
+  children: GitTreeNode<T>[];
   changeCount: number;
 }
 
-export function buildGitTree(changes: GitChange[]): GitTreeNode[] {
-  const root: GitTreeNode = {
+export function buildGitTree<T extends { file: string }>(items: T[]): GitTreeNode<T>[] {
+  const root: GitTreeNode<T> = {
     id: "",
     name: "",
     path: "",
@@ -26,8 +28,8 @@ export function buildGitTree(changes: GitChange[]): GitTreeNode[] {
     changeCount: 0,
   };
 
-  for (const change of changes) {
-    const cleanPath = change.file.replace(/^[./]+/, "");
+  for (const item of items) {
+    const cleanPath = item.file.replace(/^[./]+/, "");
     const isExplicitDir = cleanPath.endsWith("/");
     const parts = cleanPath.replace(/\/$/, "").split("/").filter(Boolean);
 
@@ -46,7 +48,7 @@ export function buildGitTree(changes: GitChange[]): GitTreeNode[] {
           name: part,
           path: accumulatedPath,
           type: "file",
-          change,
+          data: item,
           children: [],
           changeCount: 1,
         });
@@ -60,7 +62,7 @@ export function buildGitTree(changes: GitChange[]): GitTreeNode[] {
             type: "folder",
             children: [],
             changeCount: 0,
-            change: isLast && isExplicitDir ? change : undefined,
+            data: isLast && isExplicitDir ? item : undefined,
           };
           current.children.push(folder);
         }
@@ -69,10 +71,10 @@ export function buildGitTree(changes: GitChange[]): GitTreeNode[] {
     }
   }
 
-  function calculateAndSort(node: GitTreeNode): number {
+  function calculateAndSort(node: GitTreeNode<T>): number {
     if (node.type === "file") return 1;
 
-    let total = node.change !== undefined ? 1 : 0;
+    let total = node.data !== undefined ? 1 : 0;
     for (const child of node.children) {
       total += calculateAndSort(child);
     }

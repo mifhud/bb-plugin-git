@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import type { GitSyncCount } from "../contract";
+import type { ViewMode } from "@/components/ChangesList";
 
 /**
  * Branch selector + sync controls — ported from ompchamber's
@@ -18,7 +19,11 @@ export function BranchToolbar({
   onCheckout,
   onCreateBranch,
   onSync,
+  onPull,
+  onPush,
   onRefresh,
+  viewMode,
+  onViewModeChange,
 }: {
   branch: string;
   branches: string[];
@@ -28,10 +33,16 @@ export function BranchToolbar({
   onCheckout: (branch: string) => void;
   onCreateBranch: () => void;
   onSync: () => void;
+  onPull: () => void;
+  onPush: () => void;
   onRefresh: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const count = syncCount ?? { ahead: 0, behind: 0 };
 
   useEffect(() => {
@@ -44,6 +55,16 @@ export function BranchToolbar({
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current !== null && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [menuOpen]);
 
   const syncTitle =
     count.ahead > 0 && count.behind > 0
@@ -135,7 +156,7 @@ export function BranchToolbar({
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
+      <div className="relative flex shrink-0 items-center gap-1 text-muted-foreground">
         <Button
           type="button"
           variant="ghost"
@@ -155,11 +176,69 @@ export function BranchToolbar({
           size="icon"
           className="size-7"
           disabled={isBusy}
-          aria-label="Refresh status"
-          onClick={onRefresh}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="More actions"
+          onClick={() => setMenuOpen((value) => !value)}
         >
-          <Icon name="RotateCcw" className="size-3.5" />
+          <Icon name="MoreHorizontal" className="size-3.5" />
         </Button>
+        {menuOpen ? (
+          <div
+            ref={menuRef}
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-border bg-popover py-1 text-xs text-popover-foreground shadow-lg"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isBusy}
+              onClick={() => {
+                setMenuOpen(false);
+                onViewModeChange(viewMode === "flat" ? "tree" : "flat");
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover disabled:opacity-50"
+            >
+              {viewMode === "flat" ? "View as Tree" : "View as List"}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isBusy}
+              onClick={() => {
+                setMenuOpen(false);
+                onPull();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover disabled:opacity-50"
+            >
+              Pull
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isBusy}
+              onClick={() => {
+                setMenuOpen(false);
+                onPush();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover disabled:opacity-50"
+            >
+              Push
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isBusy}
+              onClick={() => {
+                setMenuOpen(false);
+                onRefresh();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover disabled:opacity-50"
+            >
+              Reload
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

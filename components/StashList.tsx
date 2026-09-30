@@ -5,6 +5,8 @@ import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
 import { DiffView } from "@/components/DiffView";
 import type { GitAction, GitStash, GitStashFile, rpcContract } from "../contract";
+import { FileListView } from "@/components/FileListView";
+import { type ViewMode } from "@/components/ChangesList";
 
 /**
  * Stash tab: stashed changes for the pinned repository, with push (via an
@@ -26,6 +28,7 @@ export function StashList({
   runAction,
   actionBusy,
   refreshToken,
+  viewMode,
 }: {
   rootId: string;
   repo: string;
@@ -33,6 +36,7 @@ export function StashList({
   actionBusy: boolean;
   /** Bumped by the rail after any mutation; the list reloads on each bump. */
   refreshToken: number;
+  viewMode: ViewMode;
 }) {
   const rpc = useRpc<typeof rpcContract>();
 
@@ -250,25 +254,11 @@ export function StashList({
           ) : stashFiles.length === 0 ? (
             <p className="p-4 text-center text-[11px] text-muted-foreground">No files in this stash.</p>
           ) : (
-            stashFiles.map((stashFile) => (
-              <div
-                key={stashFile.file}
-                role="button"
-                tabIndex={0}
-                className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
-                onClick={() => setDiffFile(stashFile.file)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") setDiffFile(stashFile.file);
-                }}
-                title={stashFile.file}
-              >
-                <span className="min-w-0 flex-1 truncate">{stashFile.file}</span>
-                <span className="shrink-0 font-mono text-[10px] tabular-nums">
-                  <span className="text-success">+{stashFile.additions ?? 0}</span>{" "}
-                  <span className="text-destructive">−{stashFile.deletions ?? 0}</span>
-                </span>
-              </div>
-            ))
+            <FileListView
+              files={stashFiles}
+              viewMode={viewMode}
+              onFileClick={(file) => setDiffFile(file)}
+            />
           )}
         </div>
       </div>

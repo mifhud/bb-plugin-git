@@ -42,7 +42,6 @@ export function splitChanges(changes: GitChange[]): { staged: GitChange[]; unsta
 interface ChangesListProps {
   changes: GitChange[];
   viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
   isBusy: boolean;
   onOpenDiff: (change: GitChange, staged: boolean) => void;
   onStage: (file: string) => void;
@@ -54,7 +53,7 @@ interface ChangesListProps {
 }
 
 export function ChangesList(props: ChangesListProps) {
-  const { changes, viewMode, onViewModeChange, isBusy } = props;
+  const { changes, viewMode, isBusy } = props;
   const { staged, unstaged } = useMemo(() => splitChanges(changes), [changes]);
   const rowActions = {
     onStage: props.onStage,
@@ -76,30 +75,11 @@ export function ChangesList(props: ChangesListProps) {
     );
   }
 
-  const toggleButton = (label: string, mode: ViewMode) => (
-    <button
-      key={mode}
-      type="button"
-      title={mode === "flat" ? "View as list" : "View as tree"}
-      aria-pressed={viewMode === mode}
-      onClick={() => onViewModeChange(mode)}
-      className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-        viewMode === mode ? "bg-state-active text-foreground" : "text-muted-foreground hover:bg-state-hover"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border px-2 py-1">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Changes
-        </span>
-        <span className="flex items-center gap-0.5">
-          {toggleButton("List", "flat")}
-          {toggleButton("Tree", "tree")}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
@@ -416,7 +396,7 @@ function TreeRows({
 
   const allFolderIds = useMemo(() => {
     const ids = new Set<string>();
-    const walk = (nodes: GitTreeNode[]): void => {
+    const walk = (nodes: GitTreeNode<GitChange>[]): void => {
       for (const node of nodes) {
         if (node.type === "folder") {
           ids.add(node.id);
@@ -454,7 +434,7 @@ function TreeRows({
     });
   };
 
-  const render = (nodes: GitTreeNode[], depth: number): React.ReactNode =>
+  const render = (nodes: GitTreeNode<GitChange>[], depth: number): React.ReactNode =>
     nodes.map((node) => {
       const indent = { paddingLeft: `${8 + depth * 12}px` };
       if (node.type === "folder") {
@@ -518,11 +498,11 @@ function TreeRows({
           </div>
         );
       }
-      if (node.change === undefined) return null;
+      if (node.data === undefined) return null;
       return (
         <div key={node.id}>
           <FileRow
-            change={node.change}
+            change={node.data}
             isStaged={isStaged}
             disabled={isBusy}
             onOpenDiff={onOpenDiff}

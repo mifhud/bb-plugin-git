@@ -323,6 +323,7 @@ export function GitRail() {
           refreshToken={historyToken}
           runAction={runAction}
           actionBusy={busy}
+          viewMode={viewMode}
         />
       );
     }
@@ -333,6 +334,7 @@ export function GitRail() {
           repo={repo}
           runAction={runAction}
           actionBusy={busy}
+          viewMode={viewMode}
           refreshToken={stashToken}
         />
       );
@@ -361,10 +363,6 @@ export function GitRail() {
         <ChangesList
           changes={status.changes}
           viewMode={viewMode}
-          onViewModeChange={(mode) => {
-            setViewMode(mode);
-            writeStoredViewMode(mode);
-          }}
           isBusy={busy}
           onOpenDiff={(change, staged) => {
             setDiffFile(change);
@@ -489,6 +487,13 @@ export function GitRail() {
           onCheckout={(name) => void runAction({ action: "checkout", branch: name })}
           onCreateBranch={() => setBranchPrompt(true)}
           onSync={() => void runAction({ action: "sync" })}
+          onPull={() => void runAction({ action: "pull" })}
+          onPush={() => void runAction({ action: "push" })}
+          viewMode={viewMode}
+          onViewModeChange={(mode) => {
+            setViewMode(mode);
+            writeStoredViewMode(mode);
+          }}
           onRefresh={() => setManualTick((tick) => tick + 1)}
         />
       ) : null}

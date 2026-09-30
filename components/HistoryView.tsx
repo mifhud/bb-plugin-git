@@ -12,6 +12,8 @@ import {
   computeGraphLinks,
 } from "@/lib/git-graph";
 import type { GitAction, GitCommit, rpcContract } from "../contract";
+import { FileListView } from "@/components/FileListView";
+import { type ViewMode } from "@/components/ChangesList";
 
 /**
  * History tab: one page of commits with a graph gutter, then a commit
@@ -30,6 +32,7 @@ export function HistoryView({
   refreshToken,
   runAction,
   actionBusy,
+  viewMode,
 }: {
   rootId: string;
   repo: string;
@@ -41,6 +44,7 @@ export function HistoryView({
     mode?: "soft" | "mixed" | "hard";
   }) => Promise<boolean>;
   actionBusy: boolean;
+  viewMode: ViewMode;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -258,29 +262,13 @@ export function HistoryView({
                 File list unavailable for this commit.
               </p>
             ) : (
-              (selected.files ?? []).map((commitFile) => (
-                <div
-                  key={commitFile.file}
-                  role="button"
-                  tabIndex={0}
-                  className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
-                  onClick={() =>
-                    setDiffTarget({ kind: "commit", hash: selected.hash, file: commitFile.file })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      setDiffTarget({ kind: "commit", hash: selected.hash, file: commitFile.file });
-                    }
-                  }}
-                  title={commitFile.file}
-                >
-                  <span className="min-w-0 flex-1 truncate">{commitFile.file}</span>
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums">
-                    <span className="text-success">+{commitFile.additions}</span>{" "}
-                    <span className="text-destructive">−{commitFile.deletions}</span>
-                  </span>
-                </div>
-              ))
+              <FileListView
+                files={selected.files ?? []}
+                viewMode={viewMode}
+                onFileClick={(file) =>
+                  setDiffTarget({ kind: "commit", hash: selected.hash, file })
+                }
+              />
             )}
           </div>
         </div>
