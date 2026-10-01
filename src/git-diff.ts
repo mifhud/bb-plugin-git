@@ -7,7 +7,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { FileDiffData } from "../contract";
-import { gitOk, runGit } from "./shell";
+import { gitOk, runGit } from "./shell.ts";
 
 /**
  * Context lines requested when the reader wants the whole file rather than

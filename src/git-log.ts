@@ -7,7 +7,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { CommitPage, GitCommit, GitCommitFile } from "../contract";
-import { gitOk, runGit } from "./shell";
+import { gitOk, runGit } from "./shell.ts";
 
 /**
  * Parses the `COMMIT_SPLIT|~|`-delimited `git log --numstat` stream into
@@ -67,14 +67,26 @@ export function parseGitLogOutput(stdout: string): GitCommit[] {
   return commits;
 }
 
-/** One page of history, newest first. `hasMore` drives the Load-more button. */
+/**
+ * Revision scope of the graph. A branch log would only ever show commits the
+ * checked-out branch already contains — nothing to cherry-pick, nothing to
+ * compare — so the graph walks every local branch, remote-tracking branch and
+ * tag, the way GitKraken and VSCode's Source Control Graph do. `HEAD` keeps a
+ * detached checkout visible; the stash and notes namespaces stay out.
+ */
+const GRAPH_REVISIONS = ["HEAD", "--branches", "--remotes", "--tags"];
+
+/** One page of the graph, newest first. `hasMore` drives the Load-more button. */
 export async function fetchGitCommits(
   targetDir: string,
   limit: number = 50,
   skip: number = 0,
 ): Promise<CommitPage> {
   let total = 0;
-  const countResult = await runGit(["rev-list", "--count", "HEAD"], { cwd: targetDir, timeout: 5_000 });
+  const countResult = await runGit(["rev-list", "--count", ...GRAPH_REVISIONS], {
+    cwd: targetDir,
+    timeout: 10_000,
+  });
   if (gitOk(countResult)) total = parseInt(countResult.stdout.trim(), 10) || 0;
 
   if (total === 0) return { commits: [], hasMore: false, total: 0 };
@@ -88,6 +100,7 @@ export async function fetchGitCommits(
       "--date-order",
       "--pretty=format:COMMIT_SPLIT|~|%H|~|%h|~|%an|~|%ad|~|%s|~|%D|~|%p",
       "--date=format:%b %d, %Y, %I:%M %p",
+      ...GRAPH_REVISIONS,
     ],
     { cwd: targetDir, timeout: 15_000 },
   );

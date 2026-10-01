@@ -477,12 +477,21 @@ function TreeRows({
                   role="none"
                 >
                   {!isStaged ? (
-                    <SectionAction
-                      title="Stage folder changes"
-                      glyph="+"
-                      disabled={isBusy}
-                      onClick={() => onStage(node.path)}
-                    />
+                    <>
+                      <SectionAction
+                        title="Discard folder changes"
+                        glyph="↺"
+                        destructive
+                        disabled={isBusy}
+                        onClick={() => onDiscard(node.path)}
+                      />
+                      <SectionAction
+                        title="Stage folder changes"
+                        glyph="+"
+                        disabled={isBusy}
+                        onClick={() => onStage(node.path)}
+                      />
+                    </>
                   ) : (
                     <SectionAction
                       title="Unstage folder changes"

@@ -15,7 +15,7 @@ bb plugin install git:https://github.com/<you>/bb-plugin-git.git@semver:^0.1.0
 - **Changes tab** — commit box on top (⌘↵ commits), then Staged and Changes sections. Hover a row for stage `+`, unstage `−`, or discard `↺`; section headers stage/unstage/discard all. Click a file to open its diff. Rows can be shown as a list or a folder tree.
 - **Diff viewer** — Unified and Split from one parser, `WS` folds whitespace-only pairs back into context, `Full` shows the whole file instead of the changed hunks.
 - **Branch bar** — the branch menu switches between local and remote branches (checking out a remote creates the tracking branch) and creates new ones. The sync button pulls then pushes, showing `↑ahead ↓behind` against the upstream (the panel refreshes the tracking ref before counting, so the numbers describe origin rather than the last fetch).
-- **History tab** — commits newest-first with a colored lane graph, refs badges, and Load more paging. Open a commit for its files (`+n −n`), copy its hash, and cherry-pick, revert, reset (soft/mixed/hard), merge, or rebase it. Click a file to read its diff in that commit.
+- **Graph tab** — every branch, remote and tag newest-first in one colored lane graph, with refs badges and Load more paging. Open a commit for its files (`+n −n`) and copy its hash, then cherry-pick, revert, reset (soft/mixed/hard), merge, or rebase it. Cherry-pick only appears where git can apply it: a commit outside the current branch, not a merge, with a clean tree. Click a file to read its diff in that commit.
 - Destructive operations (discard, hard reset) ask for confirmation first — the last git error stays visible in the panel until dismissed.
 
 ## Settings

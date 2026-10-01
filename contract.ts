@@ -35,7 +35,6 @@ export const gitCommitSchema = z.object({
   parents: z.array(z.string()),
   refs: z.array(z.string()).optional(),
   files: z.array(gitCommitFileSchema).optional(),
-  lane: z.number().optional(),
 });
 export type GitCommit = z.infer<typeof gitCommitSchema>;
 

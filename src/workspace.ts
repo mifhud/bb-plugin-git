@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { RootChoice, WorkspaceResult } from "../contract";
-import { registerRoot } from "./roots";
+import { registerRoot } from "./roots.ts";
 
 /**
  * Resolves the working folder the Git panel operates on: a thread's

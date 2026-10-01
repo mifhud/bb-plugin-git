@@ -40,6 +40,41 @@ test("a second parent opens a new lane", () => {
   assert.equal(lanes.get("base001"), 0);
 });
 
+test("a second child of one parent releases the lane it opened", () => {
+  const commits = [
+    commit("head0001", ["base001"]),
+    commit("head0002", ["base001"]),
+    commit("head0003", ["other01"]),
+    commit("base001", []),
+    commit("other01", []),
+  ];
+  const lanes = computeCommitLanes(commits);
+  assert.equal(lanes.get("head0001"), 0);
+  // Lane 0 already waits for base001, so the second head is a lane of its own
+  // rather than a duplicate of lane 0.
+  assert.equal(lanes.get("head0002"), 1);
+  // That lane is released once base001 lands, so the next head reuses it
+  // instead of drifting one column further right.
+  assert.equal(lanes.get("head0003"), 1);
+  assert.equal(lanes.get("other01"), 1);
+});
+
+test("a merge folding into an existing lane releases its own", () => {
+  const commits = [
+    commit("head0001", ["base001"]),
+    commit("merge001", ["base001", "side001"]),
+    commit("side001", ["base001"]),
+    commit("base001", []),
+  ];
+  const lanes = computeCommitLanes(commits);
+  assert.equal(lanes.get("head0001"), 0);
+  assert.equal(lanes.get("merge001"), 1);
+  // The first parent is already lane 0's, so lane 1 is released and the second
+  // parent takes it instead of opening a third column.
+  assert.equal(lanes.get("side001"), 1);
+  assert.equal(lanes.get("base001"), 0);
+});
+
 test("links connect to loaded parents and tail off for unloaded ones", () => {
   const commits = [commit("aaaaaaa1", ["bbbbbbb1"]), commit("bbbbbbb1", ["zzzzzzz9"])];
   const lanes = computeCommitLanes(commits);

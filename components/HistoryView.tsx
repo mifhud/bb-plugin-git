@@ -11,12 +11,13 @@ import {
   computeCommitLanes,
   computeGraphLinks,
 } from "@/lib/git-graph";
+import { computeCherryPickState } from "@/lib/commit-actions";
 import type { GitAction, GitCommit, rpcContract } from "../contract";
 import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
 
 /**
- * History tab: one page of commits with a graph gutter, then a commit
+ * Graph tab: one page of commits with a lane graph gutter, then a commit
  * detail with its files and the commit-level actions ompchamber offers
  * (cherry-pick, revert, reset, undo, rebase), then a file diff. Three
  * stages, one back button, exactly like the Changes tab's diff drawer.
@@ -33,6 +34,7 @@ export function HistoryView({
   runAction,
   actionBusy,
   viewMode,
+  dirty,
 }: {
   rootId: string;
   repo: string;
@@ -45,6 +47,8 @@ export function HistoryView({
   }) => Promise<boolean>;
   actionBusy: boolean;
   viewMode: ViewMode;
+  /** Uncommitted changes to tracked files: git refuses to cherry-pick then. */
+  dirty: boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -101,6 +105,12 @@ export function HistoryView({
   };
 
   const selected = commits.find((commit) => commit.hash === selectedHash) ?? null;
+
+  // Cherry-pick only shows where it can actually apply — see commit-actions.
+  const cherryPick = useMemo(
+    () => (selectedHash === null ? null : computeCherryPickState(commits, selectedHash, dirty)),
+    [commits, selectedHash, dirty],
+  );
 
   const searchTerm = query.trim().toLowerCase();
   const isSearching = searchTerm !== "";
@@ -170,7 +180,7 @@ export function HistoryView({
             variant="ghost"
             size="icon"
             className="size-6 shrink-0"
-            aria-label="Back to history"
+            aria-label="Back to commit graph"
             onClick={() => setSelectedHash(null)}
           >
             <Icon name="ChevronLeft" className="size-4" />
@@ -227,13 +237,16 @@ export function HistoryView({
                   }
                 />
               ) : null}
-              <CommitActionButton
-                label="Cherry Pick"
-                disabled={actionBusy}
-                onClick={() =>
-                  askCommit("cherry_pick", `Cherry Pick ${selected.shortHash} onto the current branch?`)
-                }
-              />
+              {cherryPick !== null && cherryPick.show ? (
+                <CommitActionButton
+                  label="Cherry Pick"
+                  disabled={actionBusy || !cherryPick.enabled}
+                  hint={cherryPick.reason}
+                  onClick={() =>
+                    askCommit("cherry_pick", `Cherry Pick ${selected.shortHash} onto the current branch?`)
+                  }
+                />
+              ) : null}
               <CommitActionButton
                 label="Revert"
                 disabled={actionBusy}
@@ -348,7 +361,7 @@ export function HistoryView({
   /* Stage 1: the commit list                                       */
   /* -------------------------------------------------------------- */
   if (loading && commits.length === 0) {
-    return <p className="p-4 text-center text-[11px] text-muted-foreground">Loading history…</p>;
+    return <p className="p-4 text-center text-[11px] text-muted-foreground">Loading commits…</p>;
   }
   if (error !== null && commits.length === 0) {
     return <p className="p-4 text-[11px] text-destructive">{error}</p>;
@@ -401,7 +414,7 @@ export function HistoryView({
             <Icon name="Search" className="size-4 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">No matching commits.</p>
             {hasMore ? (
-              <p className="text-[10px] text-muted-foreground">Click "Load more" to search more history.</p>
+              <p className="text-[10px] text-muted-foreground">Click "Load more" to search older commits.</p>
             ) : null}
           </div>
         ) : (
@@ -492,13 +505,16 @@ export function HistoryView({
 function CommitActionButton({
   label,
   disabled,
+  hint = null,
   onClick,
 }: {
   label: string;
   disabled: boolean;
+  /** Why the action is unavailable; the shared Button drops `title`, so a span carries it. */
+  hint?: string | null;
   onClick: () => void;
 }) {
-  return (
+  const button = (
     <Button
       type="button"
       variant="outline"
@@ -510,4 +526,6 @@ function CommitActionButton({
       {label}
     </Button>
   );
+
+  return hint === null ? button : <span title={hint}>{button}</span>;
 }

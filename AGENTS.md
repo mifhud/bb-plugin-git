@@ -33,9 +33,9 @@ bb plugin reload git  # Reload the plugin inside a running BB
 - **`shell.ts`** — `runGit(args, {cwd,…})` on argv arrays (never a shell string), `gitOk`, `expectOk`.
 - **`git-parse.ts`** — Pure parsers: `parsePorcelain` (status → changes) and `parseRefs` (for-each-ref → branch/lists). Pure so `node --test` can import them without spawning anything.
 - **`git-status.ts`** — `readStatus`: spawns status + refs, handles detached HEAD and non-repositories.
-- **`git-actions.ts`** — The `act` whitelist. Validates paths (containment under the repo), branch names (charset, no leading `-`), hashes (hex); implements stage/unstage/revert/commit/checkout/create_branch/push/pull/sync/cherry_pick/revert_commit/reset_commit/merge_commit/rebase_commit.
+- **`git-actions.ts`** — The `act` whitelist. Validates paths (containment under the repo), branch names (charset, no leading `-`), hashes (hex); implements stage/unstage/revert/commit/checkout/create_branch/push/pull/sync/cherry_pick/revert_commit/reset_commit/merge_commit/rebase_commit. `cherry_pick` refuses an ancestor of HEAD and a merge commit up front, so the repo is never left mid-pick.
 - **`git-diff.ts`** — `fetchWorkingFileDiff`: working/index diff with staged/untracked/full-context handling.
-- **`git-log.ts`** — `fetchGitCommits` (paged `--numstat` log with `COMMIT_SPLIT|~|` markers) and `fetchFileDiff` (show → diff-tree → blob fallbacks).
+- **`git-log.ts`** — `fetchGitCommits` (paged `--numstat` log over every branch, remote-tracking branch and tag — not just HEAD — with `COMMIT_SPLIT|~|` markers) and `fetchFileDiff` (show → diff-tree → blob fallbacks).
 - **`git-sync.ts`** — Ahead/behind with a TTL'd background `git fetch` (60s TTL, 3s bounded wait, 15s kill deadline, process-group SIGKILL).
 - **`git-repos.ts`** — Background nested-repo discovery, cached per root (`node_modules` pruned, depth ≤ 8).
 - **`roots.ts` / `workspace.ts`** — Opaque `rootId` registry and thread/project workspace resolution (same pattern as file-tree).
@@ -43,7 +43,8 @@ bb plugin reload git  # Reload the plugin inside a running BB
 ### Lib (`lib/`) — shared, pure
 
 - **`diff-parser.ts`** — Unified diff → unified lines + split rows + counts, one flush for both views (from ompchamber).
-- **`git-graph.ts`** — Lane assignment, links, bezier paths (from ompchamber).
+- **`git-graph.ts`** — Lane assignment, links, bezier paths (from ompchamber; one lane per branch arm, a parent pending in one lane only).
+- **`commit-actions.ts`** — `reachableFromHead` (ancestry inside the loaded page) and `computeCherryPickState`: cherry-pick is shown only off-branch, on a non-merge, with a clean tree.
 - **`git-status-display.ts`** — Status letter/label/color per code, folder rollups.
 - **`git-tree.ts`** — Flat changes → folder tree.
 - **`rail-state.ts` / `rail-width.ts` / `rail-inset.ts` / `portal-scope.ts`** — Rail open flag, width store, body inset, portal attributes (ported from file-tree; storage keys are `bb-plugin-git:*`).
@@ -51,7 +52,7 @@ bb plugin reload git  # Reload the plugin inside a running BB
 ### Components (`components/`)
 
 - **`GitRail.tsx`** — The window-wide rail: root/repo selectors, status polling (5s), action orchestration, confirm/prompt dialogs, tabs, diff drawer.
-- **`BranchToolbar.tsx`**, **`CommitBox.tsx`**, **`ChangesList.tsx`** (flat/tree rows), **`DiffView.tsx`** (unified/split/WS/full), **`HistoryView.tsx`** (graph gutter + commit detail + commit actions), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`**, **`RailResizeHandle.tsx`**.
+- **`BranchToolbar.tsx`**, **`CommitBox.tsx`**, **`ChangesList.tsx`** (flat/tree rows), **`DiffView.tsx`** (unified/split/WS/full), **`HistoryView.tsx`** (the Graph tab: lane gutter + commit detail + commit actions), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`**, **`RailResizeHandle.tsx`**.
 - **`ui/`** — shadcn-style primitives copied verbatim from bb-plugin-file-tree (button, input, icon registry).
 
 ## Key Patterns

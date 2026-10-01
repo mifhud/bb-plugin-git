@@ -73,7 +73,7 @@ export function GitRail() {
   const [manualTick, setManualTick] = useState(0);
 
   // Tab / detail / drafts.
-  const [tab, setTab] = useState<"changes" | "history" | "stash">("changes");
+  const [tab, setTab] = useState<"changes" | "graph" | "stash">("changes");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   const [message, setMessage] = useState("");
   const [diffFile, setDiffFile] = useState<GitChange | null>(null);
@@ -315,7 +315,9 @@ export function GitRail() {
         </div>
       );
     }
-    if (tab === "history") {
+    if (tab === "graph") {
+      // Untracked files do not block a pick; edits to tracked ones do.
+      const dirty = status.changes.some((change) => change.status !== "??");
       return (
         <HistoryView
           rootId={rootId}
@@ -324,6 +326,7 @@ export function GitRail() {
           runAction={runAction}
           actionBusy={busy}
           viewMode={viewMode}
+          dirty={dirty}
         />
       );
     }
@@ -500,7 +503,7 @@ export function GitRail() {
 
       {isRepo ? (
         <div className="flex shrink-0 items-center border-b border-sidebar-border px-1.5 py-1">
-          {(["changes", "history", "stash"] as const).map((name) => (
+          {(["changes", "graph", "stash"] as const).map((name) => (
             <button
               key={name}
               type="button"

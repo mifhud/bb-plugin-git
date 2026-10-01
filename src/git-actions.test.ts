@@ -91,3 +91,56 @@ describe("undo_commit", () => {
     }
   });
 });
+
+describe("cherry_pick", () => {
+  it("rejects a commit already in the current branch", async () => {
+    const dir = makeRepo(2);
+    try {
+      const ancestor = git(dir, ["rev-parse", "HEAD~1"]);
+      const result = await runAction(dir, { action: "cherry_pick", hash: ancestor });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /already in the current branch/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a merge commit", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["checkout", "-b", "side"]);
+      fs.writeFileSync(path.join(dir, "side.txt"), "side\n");
+      git(dir, ["add", "."]);
+      git(dir, ["commit", "-m", "side change"]);
+      git(dir, ["checkout", "-"]);
+      git(dir, ["merge", "--no-ff", "-m", "merge side", "side"]);
+      const merge = git(dir, ["rev-parse", "HEAD"]);
+
+      const result = await runAction(dir, { action: "cherry_pick", hash: merge });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /merge commit/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("picks a commit from another branch", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["checkout", "-b", "topic"]);
+      fs.writeFileSync(path.join(dir, "topic.txt"), "topic\n");
+      git(dir, ["add", "."]);
+      git(dir, ["commit", "-m", "topic change"]);
+      const topic = git(dir, ["rev-parse", "HEAD"]);
+      git(dir, ["checkout", "-"]);
+
+      const result = await runAction(dir, { action: "cherry_pick", hash: topic });
+      assert.deepEqual(result, { ok: true });
+      assert.match(git(dir, ["log", "-1", "--pretty=%s"]), /topic change/);
+      assert.equal(fs.readFileSync(path.join(dir, "topic.txt"), "utf8"), "topic\n");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+

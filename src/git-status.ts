@@ -5,11 +5,11 @@
  */
 
 import type { GitChange } from "../contract";
-import { parsePorcelain, parseRefs, type RefsInfo } from "./git-parse";
-import { gitOk, runGit } from "./shell";
+import { parsePorcelain, parseRefs, type RefsInfo } from "./git-parse.ts";
+import { gitOk, runGit } from "./shell.ts";
 
-export { parsePorcelain, parseRefs } from "./git-parse";
-export type { RefsInfo } from "./git-parse";
+export { parsePorcelain, parseRefs } from "./git-parse.ts";
+export type { RefsInfo } from "./git-parse.ts";
 
 export interface StatusRead {
   isRepo: boolean;

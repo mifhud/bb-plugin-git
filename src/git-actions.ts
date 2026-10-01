@@ -176,9 +176,12 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
       await expectOk(["push"], { ...cwd, timeout: 120_000 });
       markRemoteRefsFresh(targetDir);
       return;
-    case "cherry_pick":
-      await expectOk(["cherry-pick", assertHash(requireText(input.hash, "hash"))], cwd);
+    case "cherry_pick": {
+      const hash = assertHash(requireText(input.hash, "hash"));
+      await assertCherryPickable(targetDir, hash);
+      await expectOk(["cherry-pick", hash], cwd);
       return;
+    }
     case "revert_commit":
       await expectOk(["revert", "--no-edit", assertHash(requireText(input.hash, "hash"))], cwd);
       return;
@@ -234,6 +237,28 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
 
 function requireFile(input: ActInput): string {
   return requireText(input.file, "file");
+}
+
+/**
+ * `git cherry-pick` has two ways to leave the repo worse off, both knowable
+ * before it runs. Replaying a commit that is already an ancestor of HEAD
+ * applies nothing, and git then stops with "the previous cherry-pick is now
+ * empty" and a CHERRY_PICK_HEAD the user has to abort; a merge commit needs
+ * `-m <mainline>`, which the panel never passes. The graph hides the button in
+ * both cases — this is the backstop for a stale panel. A dirty tree is left to
+ * git, whose own message ("your local changes would be overwritten") is exact.
+ */
+async function assertCherryPickable(targetDir: string, hash: string): Promise<void> {
+  const probe = { cwd: targetDir, timeout: 5_000 };
+  const ancestry = await runGit(["rev-list", "--parents", "-n", "1", hash], probe);
+  if (gitOk(ancestry) && ancestry.stdout.trim().split(/\s+/).length > 2) {
+    throw new Error("Cannot cherry-pick a merge commit without choosing a mainline parent.");
+  }
+
+  const ancestor = await runGit(["merge-base", "--is-ancestor", hash, "HEAD"], probe);
+  if (ancestor.exitCode === 0) {
+    throw new Error("That commit is already in the current branch.");
+  }
 }
 
 function requireText(value: string | undefined, name: string): string {

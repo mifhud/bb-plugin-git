@@ -29,14 +29,6 @@ export interface GraphLink {
   color: string;
 }
 
-export interface ComputedCommitNode {
-  commit: GitCommit;
-  lane: number;
-  x: number;
-  y: number;
-  color: string;
-}
-
 /** Match full hashes against short ones (7-char parent vs 40-char commit). */
 function isSameHash(h1: string | null | undefined, h2: string | null | undefined): boolean {
   if (!h1 || !h2) return false;
@@ -46,54 +38,65 @@ function isSameHash(h1: string | null | undefined, h2: string | null | undefined
   return false;
 }
 
-/** Assign lanes to commits based on parent-child topology. */
+/**
+ * Assigns a lane (column) to every commit, walking newest-first the way
+ * `git log --graph` does. A lane holds the hash it expects to see next — a
+ * pending parent — so a commit either claims the lane already waiting for it
+ * or takes a free one.
+ *
+ * Two invariants keep the drawing honest:
+ *
+ * - **a hash is pending in at most one lane.** Without this, a second child
+ *   of the same parent parks a lane on a parent another lane already owns;
+ *   that lane is never claimed again, so it stays occupied forever and pushes
+ *   every later branch one column to the right.
+ * - **the first parent keeps the commit's own lane, unless another lane
+ *   already owns it.** In that case the lane is released and the link becomes
+ *   the fold-back curve: a branch rejoining the line it was cut from.
+ */
 export function computeCommitLanes(commits: GitCommit[]): Map<string, number> {
   const laneMap = new Map<string, number>();
-  const activeLanes: (string | null)[] = [];
+  const pending: (string | null)[] = [];
+
+  /** Lane already waiting for `hash`, else the first free lane. */
+  const claim = (hash: string): number => {
+    const waiting = pending.findIndex((target) => isSameHash(target, hash));
+    if (waiting !== -1) return waiting;
+    const free = pending.indexOf(null);
+    if (free !== -1) {
+      pending[free] = hash;
+      return free;
+    }
+    pending.push(hash);
+    return pending.length - 1;
+  };
 
   for (const commit of commits) {
-    // An explicit lane from the data wins.
-    if (typeof commit.lane === "number") {
-      laneMap.set(commit.hash, commit.lane);
+    const lane = claim(commit.hash);
+    laneMap.set(commit.hash, lane);
+
+    // Any other lane still waiting on this commit duplicates `lane`: release
+    // it so the column can carry a different branch again.
+    for (let i = 0; i < pending.length; i++) {
+      if (i !== lane && isSameHash(pending[i], commit.hash)) pending[i] = null;
+    }
+
+    const [firstParent, ...otherParents] = commit.parents ?? [];
+    if (firstParent === undefined || firstParent === "") {
+      pending[lane] = null;
       continue;
     }
 
-    let lane = activeLanes.findIndex(
-      (target) => isSameHash(target, commit.hash) || isSameHash(target, commit.shortHash),
+    const firstParentOwnedElsewhere = pending.some(
+      (target, i) => i !== lane && isSameHash(target, firstParent),
     );
+    pending[lane] = firstParentOwnedElsewhere ? null : firstParent;
 
-    if (lane === -1) {
-      lane = activeLanes.indexOf(null);
-      if (lane === -1) {
-        lane = activeLanes.length;
-        activeLanes.push(commit.hash);
-      } else {
-        activeLanes[lane] = commit.hash;
-      }
-    }
-
-    laneMap.set(commit.hash, lane);
-
-    const firstParent = commit.parents?.[0];
-    if (firstParent !== undefined && firstParent !== "") {
-      activeLanes[lane] = firstParent;
-    } else {
-      activeLanes[lane] = null;
-    }
-
-    // Additional parents (merge commits) get their own slots.
-    if (commit.parents && commit.parents.length > 1) {
-      for (let i = 1; i < commit.parents.length; i++) {
-        const parent = commit.parents[i];
-        const alreadyTracked = activeLanes.some((target) => isSameHash(target, parent));
-        if (!alreadyTracked) {
-          const freeSlot = activeLanes.indexOf(null);
-          if (freeSlot === -1) {
-            activeLanes.push(parent);
-          } else {
-            activeLanes[freeSlot] = parent;
-          }
-        }
+    // Extra parents (merges) open a lane of their own unless one is already
+    // waiting for them.
+    for (const parent of otherParents) {
+      if (parent !== "" && !pending.some((target) => isSameHash(target, parent))) {
+        claim(parent);
       }
     }
   }
