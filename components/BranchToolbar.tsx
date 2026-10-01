@@ -63,6 +63,7 @@ export function BranchToolbar({
         setMenuOpen(false);
       }
     };
+    document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [menuOpen]);
 

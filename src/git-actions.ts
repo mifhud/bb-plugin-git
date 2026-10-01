@@ -190,6 +190,20 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
     case "merge_commit":
       await expectOk(["merge", assertHash(requireText(input.hash, "hash"))], cwd);
       return;
+    case "undo_commit": {
+      const hash = assertHash(requireText(input.hash, "hash"));
+      // Guard: only the current HEAD can be undone (same constraint VSCode
+      // and most Git source controls impose — rewriting history under a
+      // checked-out commit is safe; doing it to a random ancestor is not).
+      const headResult = await runGit(["rev-parse", "--verify", "HEAD"], cwd);
+      if (!gitOk(headResult) || headResult.stdout.trim() !== hash) {
+        throw new Error("Only the current HEAD commit can be undone.");
+      }
+      // Soft reset drops the commit but keeps every change staged, matching
+      // the standard "undo last commit" semantics. Fails on the root commit.
+      await expectOk(["reset", "--soft", "HEAD~1"], cwd);
+      return;
+    }
     case "rebase_commit":
       await expectOk(["rebase", assertHash(requireText(input.hash, "hash"))], cwd);
       return;

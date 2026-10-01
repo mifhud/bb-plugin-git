@@ -18,7 +18,7 @@ import { type ViewMode } from "@/components/ChangesList";
 /**
  * History tab: one page of commits with a graph gutter, then a commit
  * detail with its files and the commit-level actions ompchamber offers
- * (cherry-pick, revert, reset, merge, rebase), then a file diff. Three
+ * (cherry-pick, revert, reset, undo, rebase), then a file diff. Three
  * stages, one back button, exactly like the Changes tab's diff drawer.
  */
 
@@ -213,11 +213,25 @@ export function HistoryView({
             ) : null}
 
             <div className="mt-2 flex flex-wrap gap-1">
+              {selected.refs?.some((ref) => ref.startsWith("HEAD")) === true &&
+              selected.parents.length > 0 ? (
+                <CommitActionButton
+                  label="Undo Commit"
+                  disabled={actionBusy}
+                  onClick={() =>
+                    askCommit(
+                      "undo_commit",
+                      `Undo ${selected.shortHash}? The commit will be removed but all changes stay staged.`,
+                      true,
+                    )
+                  }
+                />
+              ) : null}
               <CommitActionButton
-                label="Cherry-pick"
+                label="Cherry Pick"
                 disabled={actionBusy}
                 onClick={() =>
-                  askCommit("cherry_pick", `Cherry-pick ${selected.shortHash} onto the current branch?`)
+                  askCommit("cherry_pick", `Cherry Pick ${selected.shortHash} onto the current branch?`)
                 }
               />
               <CommitActionButton
@@ -231,13 +245,6 @@ export function HistoryView({
                 label="Reset…"
                 disabled={actionBusy}
                 onClick={() => setResetPrompt(selected.hash)}
-              />
-              <CommitActionButton
-                label="Merge"
-                disabled={actionBusy}
-                onClick={() =>
-                  askCommit("merge_commit", `Merge ${selected.shortHash} into the current branch?`)
-                }
               />
               <CommitActionButton
                 label="Rebase"
@@ -278,11 +285,11 @@ export function HistoryView({
             message={confirm.message}
             confirmLabel={
               confirm.action === "cherry_pick"
-                ? "Cherry-pick"
+                ? "Cherry Pick"
                 : confirm.action === "revert_commit"
                   ? "Revert"
-                  : confirm.action === "merge_commit"
-                    ? "Merge"
+                  : confirm.action === "undo_commit"
+                    ? "Undo"
                     : confirm.action === "reset_commit"
                       ? "Reset"
                       : "Rebase"

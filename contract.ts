@@ -161,6 +161,7 @@ export const gitActionSchema = z.enum([
   "revert_commit",
   "reset_commit",
   "merge_commit",
+  "undo_commit",
   "rebase_commit",
   "stash_push",
   "stash_pop",
