@@ -8,10 +8,12 @@ import { BranchToolbar } from "@/components/BranchToolbar";
 import { ChangesList, readStoredViewMode, writeStoredViewMode, type ViewMode } from "@/components/ChangesList";
 import { CommitBox } from "@/components/CommitBox";
 import { ConfirmDialog, PromptDialog } from "@/components/GitDialogs";
-import { DiffView } from "@/components/DiffView";
+import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { HistoryView } from "@/components/HistoryView";
 import { StashList } from "@/components/StashList";
 import { RailResizeHandle } from "@/components/RailResizeHandle";
+import { diffNavigation } from "@/lib/diff-navigation";
+import { openDiffInPanel } from "@/lib/open-diff-panel";
 import { acquireRailInset, syncRailInset } from "@/lib/rail-inset";
 import { usePortalScopeProps } from "@/lib/portal-scope";
 import { RAIL_EVENT, initializeRailOpen, writeStoredOpen } from "@/lib/rail-state";
@@ -264,6 +266,20 @@ export function GitRail() {
     [rpc, rootId, repo, readStatus],
   );
 
+  /**
+   * Show a diff. Prefers a real tab in BB's built-in side panel; when this
+   * window has no thread surface to open one in (no thread, or a surface that
+   * declines), it returns false and the caller keeps the rail's own drawer.
+   */
+  const openDiff = useCallback(
+    (target: DiffTarget): boolean => {
+      const navigate = diffNavigation(threadId);
+      if (navigate === null || selectedId === null) return false;
+      return openDiffInPanel(navigate, { rootKey: selectedId, repo, target });
+    },
+    [threadId, selectedId, repo],
+  );
+
   /** Discard flows ask first (unless the setting says never). */
   const requestDiscard = (message: string, file?: string): void => {
     const execute = (): Promise<boolean> => runAction({ action: "revert", ...(file !== undefined ? { file } : {}) });
@@ -327,6 +343,7 @@ export function GitRail() {
           actionBusy={busy}
           viewMode={viewMode}
           dirty={dirty}
+          onOpenDiff={openDiff}
         />
       );
     }
@@ -339,6 +356,7 @@ export function GitRail() {
           actionBusy={busy}
           viewMode={viewMode}
           refreshToken={stashToken}
+          onOpenDiff={openDiff}
         />
       );
     }
@@ -368,6 +386,8 @@ export function GitRail() {
           viewMode={viewMode}
           isBusy={busy}
           onOpenDiff={(change, staged) => {
+            const target: DiffTarget = { kind: "working", file: change.file, staged, status: change.status };
+            if (openDiff(target)) return;
             setDiffFile(change);
             setDiffStaged(staged);
           }}

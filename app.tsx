@@ -1,6 +1,8 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { GitRail } from "@/components/GitRail";
 import { GitHeaderAction } from "@/components/GitHeaderAction";
+import { GitDiffPanel } from "@/components/GitDiffPanel";
+import { GIT_DIFF_ACTION_ID } from "@/lib/open-diff-panel";
 import { toggleRailOpen, writeStoredOpen } from "@/lib/rail-state";
 
 export default definePluginApp((app) => {
@@ -9,7 +11,17 @@ export default definePluginApp((app) => {
   app.slots.experimental_threadHeaderAction({
     id: "git-panel-toggle",
     title: "Git",
-    component: () => <GitHeaderAction />,
+    component: ({ threadId }) => <GitHeaderAction threadId={threadId} />,
+  });
+
+  // A file's diff opens as a tab in BB's built-in side panel instead of the
+  // rail's own drawer (which stays as the fallback). `flush` lets `DiffView`
+  // own its padding and scrolling.
+  app.slots.threadPanelAction({
+    id: GIT_DIFF_ACTION_ID,
+    title: "Git Diff",
+    component: GitDiffPanel,
+    layout: "flush",
   });
 
   app.slots.sidebarFooterAction({

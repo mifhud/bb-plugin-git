@@ -35,6 +35,7 @@ export function HistoryView({
   actionBusy,
   viewMode,
   dirty,
+  onOpenDiff,
 }: {
   rootId: string;
   repo: string;
@@ -49,6 +50,8 @@ export function HistoryView({
   viewMode: ViewMode;
   /** Uncommitted changes to tracked files: git refuses to cherry-pick then. */
   dirty: boolean;
+  /** Open a commit file's diff as a side-panel tab; false keeps the in-rail view. */
+  onOpenDiff?: (target: DiffTarget) => boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -285,9 +288,11 @@ export function HistoryView({
               <FileListView
                 files={selected.files ?? []}
                 viewMode={viewMode}
-                onFileClick={(file) =>
-                  setDiffTarget({ kind: "commit", hash: selected.hash, file })
-                }
+                onFileClick={(file) => {
+                  const target: DiffTarget = { kind: "commit", hash: selected.hash, file };
+                  if (onOpenDiff?.(target) === true) return;
+                  setDiffTarget(target);
+                }}
               />
             )}
           </div>

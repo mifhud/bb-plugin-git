@@ -48,11 +48,13 @@ bb plugin reload git  # Reload the plugin inside a running BB
 - **`git-status-display.ts`** — Status letter/label/color per code, folder rollups.
 - **`git-tree.ts`** — Flat changes → folder tree.
 - **`rail-state.ts` / `rail-width.ts` / `rail-inset.ts` / `portal-scope.ts`** — Rail open flag, width store, body inset, portal attributes (ported from file-tree; storage keys are `bb-plugin-git:*`).
+- **`open-diff-panel.ts` / `diff-navigation.ts`** — The diff side-panel tab: its action id/params, and the per-thread navigator registry. The app overlay has no side panel, so `GitHeaderAction` registers the thread surface's `useBbNavigate` and the rail looks it up by threadId (the file-explorer pattern).
 
 ### Components (`components/`)
 
-- **`GitRail.tsx`** — The window-wide rail: root/repo selectors, status polling (5s), action orchestration, confirm/prompt dialogs, tabs, diff drawer.
-- **`BranchToolbar.tsx`**, **`CommitBox.tsx`**, **`ChangesList.tsx`** (flat/tree rows), **`DiffView.tsx`** (unified/split/WS/full), **`HistoryView.tsx`** (the Graph tab: lane gutter + commit detail + commit actions), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`**, **`RailResizeHandle.tsx`**.
+- **`GitRail.tsx`** — The window-wide rail: root/repo selectors, status polling (5s), action orchestration, confirm/prompt dialogs, tabs. A clicked file opens a diff side-panel tab via `openThreadPanel`, with the in-rail diff drawer as the fallback.
+- **`GitDiffPanel.tsx`** — The side-panel tab body for a diff: resolves the persisted `rootKey` to a fresh `rootId` and renders `DiffView`.
+- **`BranchToolbar.tsx`**, **`CommitBox.tsx`**, **`ChangesList.tsx`** (flat/tree rows), **`DiffView.tsx`** (unified/split/WS/full), **`HistoryView.tsx`** (the Graph tab: lane gutter + commit detail + commit actions), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`** (also registers this thread's navigator for diff tabs), **`RailResizeHandle.tsx`**.
 - **`ui/`** — shadcn-style primitives copied verbatim from bb-plugin-file-tree (button, input, icon registry).
 
 ## Key Patterns

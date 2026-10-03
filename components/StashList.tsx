@@ -3,7 +3,7 @@ import { useRpc } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
-import { DiffView } from "@/components/DiffView";
+import { DiffView, type DiffTarget } from "@/components/DiffView";
 import type { GitAction, GitStash, GitStashFile, rpcContract } from "../contract";
 import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
@@ -29,6 +29,7 @@ export function StashList({
   actionBusy,
   refreshToken,
   viewMode,
+  onOpenDiff,
 }: {
   rootId: string;
   repo: string;
@@ -37,6 +38,8 @@ export function StashList({
   /** Bumped by the rail after any mutation; the list reloads on each bump. */
   refreshToken: number;
   viewMode: ViewMode;
+  /** Open a stash file's diff as a side-panel tab; false keeps the in-rail view. */
+  onOpenDiff?: (target: DiffTarget) => boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
 
@@ -257,7 +260,11 @@ export function StashList({
             <FileListView
               files={stashFiles}
               viewMode={viewMode}
-              onFileClick={(file) => setDiffFile(file)}
+              onFileClick={(file) => {
+                const target: DiffTarget = { kind: "stash", stash: expandedStash.ref, file };
+                if (onOpenDiff?.(target) === true) return;
+                setDiffFile(file);
+              }}
             />
           )}
         </div>

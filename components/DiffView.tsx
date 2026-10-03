@@ -35,7 +35,9 @@ export function DiffView({
   rootId: string;
   repo: string;
   target: DiffTarget;
-  onBack: () => void;
+  /** Omitted when the viewer is its own surface (a side-panel tab), where the
+   *  tab's close button is the way back and no back arrow should render. */
+  onBack?: () => void;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const [diff, setDiff] = useState<string>("");
@@ -129,16 +131,18 @@ export function DiffView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-6 shrink-0"
-          aria-label="Back"
-          onClick={onBack}
-        >
-          <Icon name="ChevronLeft" className="size-4" />
-        </Button>
+        {onBack !== undefined ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0"
+            aria-label="Back"
+            onClick={onBack}
+          >
+            <Icon name="ChevronLeft" className="size-4" />
+          </Button>
+        ) : null}
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground" title={file}>
           {file}
         </span>
