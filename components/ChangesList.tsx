@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { getGitStatusInfo } from "@/lib/git-status-display";
 import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
+import type { CSSProperties } from "react";
 import type { GitChange } from "../contract";
 
 export type ViewMode = "flat" | "tree";
@@ -88,6 +95,14 @@ export function ChangesList(props: ChangesListProps) {
           count={staged.length}
           open={stagedOpen}
           onToggle={() => setStagedOpen((value) => !value)}
+          disabled={isBusy}
+          menuItems={[
+            {
+              label: "Unstage all changes",
+              disabled: isBusy || staged.length === 0,
+              onClick: props.onUnstageAll,
+            },
+          ]}
           actions={
             <SectionAction
               title="Unstage all changes"
@@ -119,6 +134,20 @@ export function ChangesList(props: ChangesListProps) {
           count={unstaged.length}
           open={unstagedOpen}
           onToggle={() => setUnstagedOpen((value) => !value)}
+          disabled={isBusy}
+          menuItems={[
+            {
+              label: "Stage all changes",
+              disabled: isBusy || unstaged.length === 0,
+              onClick: props.onStageAll,
+            },
+            {
+              label: "Discard all unstaged changes",
+              destructive: true,
+              disabled: isBusy || unstaged.length === 0,
+              onClick: props.onDiscardAll,
+            },
+          ]}
           actions={
             <>
               <SectionAction
@@ -158,21 +187,38 @@ export function ChangesList(props: ChangesListProps) {
   );
 }
 
+interface SectionMenuItem {
+  label: string;
+  destructive?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+/** Section header for "Staged Changes" / "Changes". Left-click toggles the
+ *  collapse; right-click opens a context menu of the section's bulk actions
+ *  (the same ones the inline buttons offer), so every section action is
+ *  reachable both inline and via right-click. When the panel is busy the
+ *  menu is suppressed entirely, matching RowContextMenu. */
 function Section({
   title,
   count,
   open,
   onToggle,
+  menuItems,
+  disabled,
   actions,
 }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
+  menuItems?: SectionMenuItem[];
+  disabled?: boolean;
   actions?: React.ReactNode;
 }) {
-  return (
-    <div className="group flex cursor-pointer items-center justify-between px-2 py-1 transition-colors hover:bg-state-hover"
+  const header = (
+    <div
+      className="group flex cursor-pointer items-center justify-between px-2 py-1 transition-colors hover:bg-state-hover"
       onClick={onToggle}
       role="button"
       tabIndex={0}
@@ -184,7 +230,10 @@ function Section({
       }}
     >
       <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-        <span className="w-3 text-center text-muted-foreground">{open ? "▾" : "▸"}</span>
+        <Icon
+          name={open ? "ChevronDown" : "ChevronRight"}
+          className="size-3 shrink-0 text-muted-foreground"
+        />
         {title}
         <span className="rounded-full border border-border px-1.5 text-[9px] font-normal text-muted-foreground">
           {count}
@@ -198,6 +247,30 @@ function Section({
         {actions}
       </span>
     </div>
+  );
+
+  if (disabled || menuItems === undefined || menuItems.length === 0) return header;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {header}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        {menuItems.map((item, index) => (
+          <Fragment key={item.label}>
+            {index > 0 && <ContextMenuSeparator />}
+            <ContextMenuItem
+              onSelect={item.onClick}
+              disabled={item.disabled}
+              className={item.destructive ? "text-destructive focus:text-destructive" : undefined}
+            >
+              {item.label}
+            </ContextMenuItem>
+          </Fragment>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -289,6 +362,7 @@ function FileRow({
   onStage,
   onUnstage,
   onDiscard,
+  indent,
 }: {
   change: GitChange;
   isStaged: boolean;
@@ -297,6 +371,8 @@ function FileRow({
   onStage: (file: string) => void;
   onUnstage: (file: string) => void;
   onDiscard: (file: string) => void;
+  /** Tree-mode indent; when provided, uses compact row styling instead of flat. */
+  indent?: CSSProperties;
 }) {
   const info = getGitStatusInfo(change.status, isStaged);
   const parts = change.file.split("/");
@@ -305,7 +381,12 @@ function FileRow({
 
   const row = (
     <div
-      className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+      className={
+        indent
+          ? "group flex cursor-pointer items-center justify-between gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
+          : "group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+      }
+      style={indent}
       onClick={() => onOpenDiff(change, isStaged)}
       role="button"
       tabIndex={0}
@@ -358,7 +439,6 @@ function FileRow({
       </span>
     </div>
   );
-
 
   return (
     <RowContextMenu
@@ -436,7 +516,7 @@ function TreeRows({
 
   const render = (nodes: GitTreeNode<GitChange>[], depth: number): React.ReactNode =>
     nodes.map((node) => {
-      const indent = { paddingLeft: `${8 + depth * 12}px` };
+      const indent = { paddingLeft: `${4 + depth * 10}px` };
       if (node.type === "folder") {
         const isOpen = effective.has(node.id);
         return (
@@ -450,7 +530,7 @@ function TreeRows({
               onDiscard={onDiscard}
             >
               <div
-                className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+                className="group flex cursor-pointer items-center justify-between gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
                 style={indent}
                 onClick={() => toggle(node.id)}
                 role="button"
@@ -461,12 +541,14 @@ function TreeRows({
                     toggle(node.id);
                   }
                 }}
+                title={node.path}
               >
-                <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
-                    {isOpen ? "▾" : "▸"}
+                <span className="flex min-w-0 flex-1 items-center gap-1">
+                  <span className="flex size-3 shrink-0 items-center justify-center text-muted-foreground">
+                    <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} className="size-2.5" />
                   </span>
-                  <span className="truncate font-medium text-foreground">{node.name}</span>
+                  <Icon name={isOpen ? "FolderOpen" : "Folder"} className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 truncate font-medium text-foreground">{node.name}</span>
                   <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
                     {node.changeCount}
                   </span>
@@ -509,19 +591,18 @@ function TreeRows({
       }
       if (node.data === undefined) return null;
       return (
-        <div key={node.id}>
-          <FileRow
-            change={node.data}
-            isStaged={isStaged}
-            disabled={isBusy}
-            onOpenDiff={onOpenDiff}
-            onStage={onStage}
-            onUnstage={onUnstage}
-            onDiscard={onDiscard}
-          />
-        </div>
+        <FileRow
+          change={node.data}
+          isStaged={isStaged}
+          disabled={isBusy}
+          onOpenDiff={onOpenDiff}
+          onStage={onStage}
+          onUnstage={onUnstage}
+          onDiscard={onDiscard}
+          indent={indent}
+        />
       );
     });
 
-  return <>{render(tree, 1)}</>;
+  return <>{render(tree, 0)}</>;
 }

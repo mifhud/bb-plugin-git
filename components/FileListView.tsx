@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
+import { Icon } from "@/components/ui/icon";
+import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import type { ViewMode } from "@/components/ChangesList";
 
 /** Minimal shape any file row needs: a path and optional line counts. */
@@ -93,13 +95,13 @@ export function FileListView<T extends FileItem>({
 
   const render = (nodes: GitTreeNode<T>[], depth: number): React.ReactNode =>
     nodes.map((node) => {
-      const indent = { paddingLeft: `${8 + depth * 12}px` };
+      const indent = { paddingLeft: `${4 + depth * 10}px` };
       if (node.type === "folder") {
         const isOpen = expanded.has(node.id);
         return (
           <div key={node.id}>
             <div
-              className="group flex cursor-pointer items-center justify-between gap-1 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+              className="group flex cursor-pointer items-center justify-between gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
               style={indent}
               onClick={() => toggle(node.id)}
               role="button"
@@ -110,12 +112,17 @@ export function FileListView<T extends FileItem>({
                   toggle(node.id);
                 }
               }}
+              title={node.name}
             >
-              <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span className="w-3 shrink-0 text-center text-[9px] text-muted-foreground">
-                  {isOpen ? "▾" : "▸"}
+              <span className="flex min-w-0 flex-1 items-center gap-1">
+                <span className="flex size-3 shrink-0 items-center justify-center text-muted-foreground">
+                  <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} className="size-2.5" />
                 </span>
-                <span className="truncate">{node.name}</span>
+                <Icon
+                  name={isOpen ? "FolderOpen" : "Folder"}
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                />
+                <span className="min-w-0 truncate">{node.name}</span>
               </span>
               <span className="rounded-full border border-border px-1 text-[9px] text-muted-foreground">
                 {node.changeCount}
@@ -127,18 +134,20 @@ export function FileListView<T extends FileItem>({
       }
       if (node.data === undefined) return null;
       const data = node.data;
+      const fileName = data.file.split("/").pop() ?? data.file;
       return (
         <div
           key={data.file}
           role="button"
           tabIndex={0}
-          className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+          className="flex cursor-pointer items-center gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
           style={indent}
           onClick={() => onFileClick(data.file)}
           onKeyDown={(event) => handleFileKeyDown(event, data.file)}
           title={data.file}
         >
-          <span className="min-w-0 flex-1 truncate">{data.file}</span>
+          <FileTypeIcon name={fileName} className="size-3 shrink-0" />
+          <span className="min-w-0 truncate">{data.file}</span>
           <span className="shrink-0 font-mono text-[10px] tabular-nums">
             <span className="text-success">+{data.additions ?? 0}</span>{" "}
             <span className="text-destructive">−{data.deletions ?? 0}</span>
@@ -147,5 +156,5 @@ export function FileListView<T extends FileItem>({
       );
     });
 
-  return <>{render(tree, 1)}</>;
+  return <>{render(tree, 0)}</>;
 }
