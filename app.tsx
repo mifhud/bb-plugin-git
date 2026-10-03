@@ -24,6 +24,16 @@ export default definePluginApp((app) => {
     layout: "flush",
   });
 
+  // The same diff tab is also offered on the New Thread (root compose) screen,
+  // whose panel launcher uses experimental_newThreadPanelAction — the
+  // threadPanelAction slot is thread-only and not rendered there.
+  app.slots.experimental_newThreadPanelAction({
+    id: GIT_DIFF_ACTION_ID,
+    title: "Git Diff",
+    component: GitDiffPanel,
+    layout: "flush",
+  });
+
   app.slots.sidebarFooterAction({
     id: "git-panel-toggle",
     title: "Git",

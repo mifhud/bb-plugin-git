@@ -14,7 +14,7 @@ import { gitOk, runGit } from "./shell.ts";
  * the hunks. `--unified` takes any count, so this is a cap on the FILE, not
  * on the change: git emits every line it can reach around the edits.
  */
-const FULL_CONTEXT = 1_000_000;
+export const FULL_CONTEXT = 1_000_000;
 
 /** Runs one git diff probe and returns its stdout ("" on failure). */
 async function gitOut(

@@ -125,7 +125,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       try {
         const rootPath = await requireLocalRoot(input.rootId);
         const targetDir = resolveRepoDir(rootPath, input.repo);
-        const diff = await fetchStashFileDiff(targetDir, input.stash, input.file);
+        const diff = await fetchStashFileDiff(targetDir, input.stash, input.file, input.fullContext === true);
         if (diff === "") {
           return { ok: false as const, error: `No diff available for ${input.file} in ${input.stash}.` };
         }
@@ -170,7 +170,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       try {
         const rootPath = await requireLocalRoot(input.rootId);
         const targetDir = resolveRepoDir(rootPath, input.repo);
-        const diff = await fetchFileDiff(targetDir, input.hash, input.file);
+        const diff = await fetchFileDiff(targetDir, input.hash, input.file, input.fullContext === true);
         if (diff === "") {
           return { ok: false as const, error: `No diff available for ${input.file}.` };
         }

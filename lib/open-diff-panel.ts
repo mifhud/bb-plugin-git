@@ -2,9 +2,11 @@ import type { JsonValue, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { DiffTarget } from "@/components/DiffView";
 
 /**
- * Opens a diff as a tab in BB's built-in side panel instead of the rail's own
- * drawer. Registered in `app.tsx` as a `threadPanelAction`; the tab renders
- * `GitDiffPanel`. The id is shared by the registration and every opener.
+ * Opens a diff as a tab in BB's built-in side panel instead of the rail's
+ * own drawer. Registered in `app.tsx` as both a `threadPanelAction` (existing
+ * thread surfaces) and an `experimental_newThreadPanelAction` (the New Thread
+ * compose screen, where thread-only slots are not rendered). The id is shared
+ * by both registrations and every opener.
  */
 export const GIT_DIFF_ACTION_ID = "git-diff";
 

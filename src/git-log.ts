@@ -8,6 +8,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { CommitPage, GitCommit, GitCommitFile } from "../contract";
 import { gitOk, runGit } from "./shell.ts";
+import { FULL_CONTEXT } from "./git-diff.ts";
 
 /**
  * Parses the `COMMIT_SPLIT|~|`-delimited `git log --numstat` stream into
@@ -129,24 +130,31 @@ function normalizeCommitPath(file: string): string {
  * `git show` alone misses: root commits (diff-tree --root), added files and
  * deleted files (whole blob rendered as +/− lines), and files read straight
  * off disk when the checkout matches the commit.
+ *
+ * `fullContext` requests the entire file (all context lines) instead of the
+ * default hunk-scoped diff, mirroring `fetchWorkingFileDiff`'s full-context mode.
  */
 export async function fetchFileDiff(
   targetDir: string,
   hash: string,
   file: string,
+  fullContext: boolean = false,
 ): Promise<string> {
   const cleanFile = normalizeCommitPath(file);
   if (cleanFile === "") return "";
 
+  const ctx = fullContext ? [`--unified=${FULL_CONTEXT}`] : [];
+  const maxBuffer = fullContext ? 1024 * 1024 * 16 : undefined;
+
   const showPatch = await runGit(
-    ["show", "--pretty=format:", "--patch", hash, "--", cleanFile],
-    { cwd: targetDir, timeout: 10_000 },
+    ["show", "--pretty=format:", "--patch", ...ctx, hash, "--", cleanFile],
+    { cwd: targetDir, timeout: 10_000, maxBuffer },
   );
   if (showPatch.stdout.trim() !== "") return showPatch.stdout.trim();
 
   const diffTree = await runGit(
-    ["diff-tree", "-r", "-p", "--root", hash, "--", cleanFile],
-    { cwd: targetDir, timeout: 10_000 },
+    ["diff-tree", "-r", "-p", "--root", ...ctx, hash, "--", cleanFile],
+    { cwd: targetDir, timeout: 10_000, maxBuffer },
   );
   if (diffTree.stdout.trim() !== "") return diffTree.stdout.trim();
 

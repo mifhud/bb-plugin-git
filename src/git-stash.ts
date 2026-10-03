@@ -7,6 +7,7 @@
 import type { GitStash, GitStashFile } from "../contract";
 import { parseStash } from "./git-parse.ts";
 import { gitOk, runGit } from "./shell.ts";
+import { FULL_CONTEXT } from "./git-diff.ts";
 
 export { parseStash } from "./git-parse.ts";
 export type { GitStash } from "../contract";
@@ -54,10 +55,21 @@ export async function fetchStashFiles(targetDir: string, ref: string): Promise<G
  * a `-- <pathspec>` ("Too many revisions"). Diffing `ref^1` (the stashed
  * HEAD) against `ref` yields exactly the change `git stash show -p` shows,
  * but accepts a pathspec filter.
+ *
+ * `fullContext` requests the entire file (all context lines) instead of the
+ * default hunk-scoped diff, mirroring `fetchWorkingFileDiff`'s full-context mode.
  * Throws with git's stderr on failure; the RPC layer turns that into ok:false.
  */
-export async function fetchStashFileDiff(targetDir: string, ref: string, file: string): Promise<string> {
-  const result = await runGit(["diff", `${ref}^1`, ref, "--", file], { cwd: targetDir });
+export async function fetchStashFileDiff(
+  targetDir: string,
+  ref: string,
+  file: string,
+  fullContext: boolean = false,
+): Promise<string> {
+  const ctx = fullContext ? `--unified=${FULL_CONTEXT}` : undefined;
+  const maxBuffer = fullContext ? 1024 * 1024 * 16 : undefined;
+  const args = ["diff", ...(ctx !== undefined ? [ctx] : []), `${ref}^1`, ref, "--", file];
+  const result = await runGit(args, { cwd: targetDir, maxBuffer });
   if (!gitOk(result)) {
     throw new Error(result.stderr.trim() || "Could not read stash diff.");
   }

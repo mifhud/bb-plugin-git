@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useRpc, type PluginThreadPanelProps } from "@get-bb/plugin-sdk/app";
+import { useBbContext, useRpc, type PluginNewThreadPanelProps, type PluginThreadPanelProps } from "@get-bb/plugin-sdk/app";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import type { GitDiffPanelParams } from "@/lib/open-diff-panel";
 import type { rpcContract } from "../contract";
@@ -40,7 +40,8 @@ function coerceParams(value: unknown): GitDiffPanelParams | null {
   return { rootKey: params.rootKey, repo: params.repo, target };
 }
 
-export function GitDiffPanel({ threadId, params }: PluginThreadPanelProps) {
+export function GitDiffPanel({ params }: PluginThreadPanelProps | PluginNewThreadPanelProps) {
+  const { threadId } = useBbContext();
   const rpc = useRpc<typeof rpcContract>();
   const request = useMemo(() => coerceParams(params), [params]);
   const [rootId, setRootId] = useState<string | null>(null);

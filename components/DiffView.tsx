@@ -82,13 +82,13 @@ export function DiffView({
             status: parsed.data.status,
           });
         } else if (target.kind === "stash") {
-          const result = await rpc.call("stashFileDiff", { rootId, repo, stash: target.stash, file: target.file });
+          const result = await rpc.call("stashFileDiff", { rootId, repo, stash: target.stash, file: target.file, fullContext });
           if (cancelled) return;
           if (!result.ok) throw new Error(result.error);
           setDiff(result.diff);
           setMeta(null);
         } else {
-          const result = await rpc.call("commitDiff", { rootId, repo, hash: target.hash, file: target.file });
+          const result = await rpc.call("commitDiff", { rootId, repo, hash: target.hash, file: target.file, fullContext });
           if (cancelled) return;
           if (!result.ok) throw new Error(result.error);
           setDiff(result.diff);
@@ -166,17 +166,15 @@ export function DiffView({
           >
             WS
           </button>
-          {target.kind === "working" ? (
-            <button
-              type="button"
-              title="Show the whole file instead of the changed hunks"
-              aria-pressed={fullContext}
-              className={toggleClass(fullContext)}
-              onClick={() => setFullContext((value) => !value)}
-            >
-              Full
-            </button>
-          ) : null}
+          <button
+            type="button"
+            title="Show the whole file instead of the changed hunks"
+            aria-pressed={fullContext}
+            className={toggleClass(fullContext)}
+            onClick={() => setFullContext((value) => !value)}
+          >
+            Full
+          </button>
         </span>
       </div>
 

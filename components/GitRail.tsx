@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useBbContext, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
+import { useBbContext, useBbNavigate, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useIsCompactViewport } from "@/components/ui/hooks/use-compact-viewport";
@@ -45,6 +45,7 @@ function writePinnedRoot(id: string): void {
 export function GitRail() {
   const rpc = useRpc<typeof rpcContract>();
   const { threadId, projectId } = useBbContext();
+  const appNavigate = useBbNavigate();
   const { values, isLoading: settingsLoading } = useSettings();
   const compact = useIsCompactViewport();
   const railWidthPx = useRailWidthPx();
@@ -268,16 +269,20 @@ export function GitRail() {
 
   /**
    * Show a diff. Prefers a real tab in BB's built-in side panel; when this
-   * window has no thread surface to open one in (no thread, or a surface that
-   * declines), it returns false and the caller keeps the rail's own drawer.
+   * window has no thread-scoped navigator (the New Thread compose screen, where
+   * threadId is null and GitHeaderAction does not mount), it falls back to the
+   * app-wide navigator so openThreadPanel can target the compose surface's
+   * panel. If the surface still declines, it returns false and the caller keeps
+   * the rail's own drawer.
    */
   const openDiff = useCallback(
     (target: DiffTarget): boolean => {
-      const navigate = diffNavigation(threadId);
-      if (navigate === null || selectedId === null) return false;
+      if (selectedId === null) return false;
+      const navigate = threadId !== null ? diffNavigation(threadId) : appNavigate;
+      if (navigate === null) return false;
       return openDiffInPanel(navigate, { rootKey: selectedId, repo, target });
     },
-    [threadId, selectedId, repo],
+    [threadId, appNavigate, selectedId, repo],
   );
 
   /** Discard flows ask first (unless the setting says never). */
