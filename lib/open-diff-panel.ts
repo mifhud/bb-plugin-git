@@ -22,11 +22,17 @@ export interface GitDiffPanelParams {
 
 type Navigate = ReturnType<typeof useBbNavigate>;
 
-/** Tab label: the diffed file's basename, marked when it is the index copy. */
 export function diffTabTitle(target: DiffTarget): string {
   const name = target.file.split("/").pop() ?? target.file;
   const base = name === "" ? target.file : name;
-  return target.kind === "working" && target.staged ? `${base} (staged)` : base;
+  switch (target.kind) {
+    case "working":
+      return target.staged ? `${base} (staged)` : `${base} (unstaged)`;
+    case "commit":
+      return `${base} (${target.hash.slice(0, 8)})`;
+    case "stash":
+      return `${base} (${target.stash})`;
+  }
 }
 
 /**
