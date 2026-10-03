@@ -131,7 +131,7 @@ export function parseUnifiedDiff(rawDiff: string, options: ParseDiffOptions = {}
       rawLine.startsWith("similarity index") ||
       rawLine.startsWith("old mode") ||
       rawLine.startsWith("new mode") ||
-      rawLine.startsWith("\\\\ No newline")
+      rawLine.startsWith("\\ No newline")
     ) {
       continue;
     }

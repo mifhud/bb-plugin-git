@@ -25,6 +25,13 @@ const DEL_STYLE = { backgroundColor: "rgba(239, 68, 68, 0.13)" };
 
 /** Beyond this many rendered lines the viewer stops and says so. */
 const MAX_RENDERED_LINES = 5000;
+/**
+ * Full-context diffs show the entire file. The 5000-line rendering cap would
+ * truncate the actual +/- changes away for large files, making the diff look
+ * all-gray — as if the colors disappeared. Raise the cap when the user
+ * explicitly asks for the whole file.
+ */
+const MAX_FULL_CONTEXT_LINES = 50_000;
 
 export function DiffView({
   rootId,
@@ -47,6 +54,21 @@ export function DiffView({
   const [split, setSplit] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [fullContext, setFullContext] = useState(false);
+  // The BB host can hide scrollbars via ::-webkit-scrollbar { display: none }
+  // or scrollbar-width: none. Inject !important CSS to force them visible.
+  useEffect(() => {
+    const styleId = "bb-plugin-git-diff-scrollbars";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent =
+      "[data-git-scroll]{overflow-y:scroll!important;overflow-x:auto!important;scrollbar-width:auto!important;-ms-overflow-style:auto!important}" +
+      "[data-git-scroll]::-webkit-scrollbar{display:block!important;width:14px!important;height:14px!important}" +
+      "[data-git-scroll]::-webkit-scrollbar-track{background:transparent!important}" +
+      "[data-git-scroll]::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.4)!important;border-radius:4px!important}";
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
 
   const file = target.file;
   // Primitive key: a fresh `target` object arrives every render of the rail,
@@ -118,9 +140,10 @@ export function DiffView({
   });
   const additions = meta?.additions ?? parsed.additions;
   const deletions = meta?.deletions ?? parsed.deletions;
+  const renderCap = fullContext ? MAX_FULL_CONTEXT_LINES : MAX_RENDERED_LINES;
   const truncated = split
-    ? parsed.splitRows.length > MAX_RENDERED_LINES
-    : parsed.lines.length > MAX_RENDERED_LINES;
+    ? parsed.splitRows.length > renderCap
+    : parsed.lines.length > renderCap;
 
   const toggleClass = (active: boolean): string =>
     cn(
@@ -129,7 +152,7 @@ export function DiffView({
     );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
         {onBack !== undefined ? (
           <Button
@@ -185,18 +208,18 @@ export function DiffView({
       ) : diff.trim() === "" || diff === "No differences found" ? (
         <p className="p-4 text-[11px] text-muted-foreground">No differences.</p>
       ) : split ? (
-        <SplitBody rows={parsed.splitRows} truncated={truncated} />
+        <SplitBody rows={parsed.splitRows} truncated={truncated} renderCap={renderCap} />
       ) : (
-        <UnifiedBody lines={parsed.lines} truncated={truncated} />
+        <UnifiedBody lines={parsed.lines} truncated={truncated} renderCap={renderCap} />
       )}
     </div>
   );
 }
 
-function UnifiedBody({ lines, truncated }: { lines: DiffLine[]; truncated: boolean }) {
-  const shown = truncated ? lines.slice(0, MAX_RENDERED_LINES) : lines;
+function UnifiedBody({ lines, truncated, renderCap }: { lines: DiffLine[]; truncated: boolean; renderCap: number }) {
+  const shown = truncated ? lines.slice(0, renderCap) : lines;
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div data-git-scroll className="min-h-0 flex-1 h-full overflow-y-scroll overflow-x-auto">
       <pre className="min-w-max font-mono text-[11px] leading-[1.45]">
         {shown.map((line, index) => {
           if (line.type === "meta") {
@@ -221,7 +244,7 @@ function UnifiedBody({ lines, truncated }: { lines: DiffLine[]; truncated: boole
               <span className="w-9 shrink-0 select-none px-1 text-right text-[9px] text-muted-foreground" style={style}>
                 {line.newLineNumber ?? ""}
               </span>
-              <span className={`whitespace-pre px-2 ${toneClass}`}>
+              <span className={`whitespace-pre overflow-hidden px-2 ${toneClass}`}>
                 {line.type === "add" ? "+" : line.type === "del" ? "−" : " "}
                 {line.text}
               </span>
@@ -230,7 +253,7 @@ function UnifiedBody({ lines, truncated }: { lines: DiffLine[]; truncated: boole
         })}
         {truncated ? (
           <div className="px-2 py-1 text-[10px] text-muted-foreground">
-            … {lines.length - MAX_RENDERED_LINES} more lines not shown
+            … {lines.length - renderCap} more lines not shown
           </div>
         ) : null}
       </pre>
@@ -238,31 +261,47 @@ function UnifiedBody({ lines, truncated }: { lines: DiffLine[]; truncated: boole
   );
 }
 
-function SplitBody({ rows, truncated }: { rows: SplitDiffRow[]; truncated: boolean }) {
-  const shown = truncated ? rows.slice(0, MAX_RENDERED_LINES) : rows;
+function SplitBody({ rows, truncated, renderCap }: { rows: SplitDiffRow[]; truncated: boolean; renderCap: number }) {
+  const shown = truncated ? rows.slice(0, renderCap) : rows;
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
-      <div className="min-w-max font-mono text-[11px] leading-[1.45]">
-        {shown.map((row, index) => {
-          if (row.isMeta === true) {
-            return (
-              <div key={index} className="bg-state-hover px-2 text-[10px] text-muted-foreground">
-                {row.metaText ?? ""}
-              </div>
-            );
-          }
-          return (
-            <div key={index} className="flex">
-              <SplitCell side={row.left} />
-              <SplitCell side={row.right} />
+    <div className="min-h-0 flex-1 flex">
+      <div data-git-scroll className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto border-r border-border/40">
+        <div className="min-w-max font-mono text-[11px] leading-[1.45]">
+          {shown.map((row, index) => {
+            if (row.isMeta === true) {
+              return (
+                <div key={index} className="bg-state-hover px-2 text-[10px] text-muted-foreground">
+                  {row.metaText ?? ""}
+                </div>
+              );
+            }
+            return <SplitCell side={row.left} />;
+          })}
+          {truncated ? (
+            <div className="px-2 py-1 text-[10px] text-muted-foreground">
+              … {rows.length - renderCap} more rows not shown
             </div>
-          );
-        })}
-        {truncated ? (
-          <div className="px-2 py-1 text-[10px] text-muted-foreground">
-            … {rows.length - MAX_RENDERED_LINES} more rows not shown
-          </div>
-        ) : null}
+          ) : null}
+        </div>
+      </div>
+      <div data-git-scroll className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto">
+        <div className="min-w-max font-mono text-[11px] leading-[1.45]">
+          {shown.map((row, index) => {
+            if (row.isMeta === true) {
+              return (
+                <div key={index} className="bg-state-hover px-2 text-[10px] text-muted-foreground">
+                  {row.metaText ?? ""}
+                </div>
+              );
+            }
+            return <SplitCell side={row.right} />;
+          })}
+          {truncated ? (
+            <div className="px-2 py-1 text-[10px] text-muted-foreground">
+              … {rows.length - renderCap} more rows not shown
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -274,20 +313,20 @@ function SplitCell({
   side?: { type: "del" | "add" | "context"; text: string; lineNumber: number };
 }) {
   if (side === undefined) {
-    return <span className="w-1/2 flex-1 border-r border-border/40 opacity-40" />;
+    return <span className="block w-full opacity-40" />;
   }
   const style = side.type === "add" ? ADD_STYLE : side.type === "del" ? DEL_STYLE : undefined;
   const toneClass =
     side.type === "add" ? "text-success" : side.type === "del" ? "text-destructive" : "text-foreground/85";
   return (
-    <span className="flex w-1/2 flex-1 border-r border-border/40" style={style}>
+    <span className="flex w-full" style={style}>
       <span
         className="w-8 shrink-0 select-none px-1 text-right text-[9px] text-muted-foreground"
         style={style}
       >
         {side.lineNumber}
       </span>
-      <span className={`whitespace-pre px-1.5 ${toneClass}`}>
+      <span className={`whitespace-pre overflow-hidden px-1.5 ${toneClass}`}>
         {side.type === "add" ? "+" : side.type === "del" ? "−" : " "}
         {side.text}
       </span>

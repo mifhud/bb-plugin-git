@@ -88,3 +88,22 @@ test("empty diff parses to nothing", () => {
   assert.equal(additions, 0);
   assert.equal(deletions, 0);
 });
+
+test("\\ No newline at end of file marker is skipped, not rendered as context", () => {
+  // git emits a literal "\ No newline at end of file" line after the affected
+  // line. The parser must drop it, not render it as a gray context row.
+  const raw = [
+    "@@ -1,3 +1,3 @@",
+    " line1",
+    "-line2",
+    "+changed2",
+    " line3",
+    "\\ No newline at end of file",
+  ].join("\n");
+  const { lines, additions, deletions } = parseUnifiedDiff(raw, { views: "unified" });
+  assert.equal(additions, 1);
+  assert.equal(deletions, 1);
+  assert.ok(!lines.some((l) => l.text.includes("No newline")));
+  // The last rendered line should be the context "line3", not the marker.
+  assert.equal(lines[lines.length - 1].text, "line3");
+});
