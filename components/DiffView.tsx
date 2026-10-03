@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -261,11 +261,26 @@ function UnifiedBody({ lines, truncated, renderCap }: { lines: DiffLine[]; trunc
   );
 }
 
+/** Mirrors one split pane's vertical scroll onto the other. The equality guard
+ *  makes the mirrored event a no-op, so the two panes cannot bounce forever.
+ *  Only the vertical axis is shared: each pane keeps its own horizontal scroll. */
+function syncVerticalScroll(source: HTMLDivElement | null, target: HTMLDivElement | null): void {
+  if (source === null || target === null || target.scrollTop === source.scrollTop) return;
+  target.scrollTop = source.scrollTop;
+}
+
 function SplitBody({ rows, truncated, renderCap }: { rows: SplitDiffRow[]; truncated: boolean; renderCap: number }) {
   const shown = truncated ? rows.slice(0, renderCap) : rows;
+  const leftPane = useRef<HTMLDivElement>(null);
+  const rightPane = useRef<HTMLDivElement>(null);
   return (
     <div className="min-h-0 flex-1 flex">
-      <div data-git-scroll className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto border-r border-border/40">
+      <div
+        ref={leftPane}
+        data-git-scroll
+        onScroll={() => syncVerticalScroll(leftPane.current, rightPane.current)}
+        className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto border-r border-border/40"
+      >
         <div className="min-w-max font-mono text-[11px] leading-[1.45]">
           {shown.map((row, index) => {
             if (row.isMeta === true) {
@@ -284,7 +299,12 @@ function SplitBody({ rows, truncated, renderCap }: { rows: SplitDiffRow[]; trunc
           ) : null}
         </div>
       </div>
-      <div data-git-scroll className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto">
+      <div
+        ref={rightPane}
+        data-git-scroll
+        onScroll={() => syncVerticalScroll(rightPane.current, leftPane.current)}
+        className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto"
+      >
         <div className="min-w-max font-mono text-[11px] leading-[1.45]">
           {shown.map((row, index) => {
             if (row.isMeta === true) {
