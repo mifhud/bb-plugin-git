@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -17,12 +23,21 @@ import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
 
 /**
- * Graph tab: one page of commits with a lane graph gutter, then a commit
- * detail with its files and the commit-level actions ompchamber offers
- * (cherry-pick, revert, reset, undo, rebase), then a file diff. Three
- * stages, one back button, exactly like the Changes tab's diff drawer.
+ * Graph tab: commits with a lane graph gutter. Clicking a commit expands an
+ * inline detail directly beneath that row (show/hide, like a tree dropdown) —
+ * no stage switch, and any number of rows can be open at once without closing
+ * the others. The panel shows the commit message, refs, commit-level actions
+ * (cherry-pick, revert, reset, undo, rebase) and a file list whose diffs open
+ * as side-panel tabs or an in-rail drawer.
+ *
+ * Rows are absolutely positioned over a fixed-height SVG graph, so the detail
+ * sits on its own layer right under the clicked row and every row/dot/link
+ * after an open detail shifts down by that detail's measured height — the lane
+ * dots stay glued to their rows. Each open detail's height is read in a layout
+ * effect (pre-paint) so there is no flash; heights are kept per commit so
+ * several open panels stack correctly. The graph is 0-wide while searching, so
+ * the shifting only ever affects the visible layout.
  */
-
 const ROW_H = 46;
 const LANE_STEP = 12;
 const PAGE_SIZE = 50;
@@ -60,7 +75,8 @@ export function HistoryView({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  /* Hashes whose detail is expanded inline; several may be open at once. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
   const [confirm, setConfirm] = useState<{
     action: GitAction;
@@ -70,6 +86,12 @@ export function HistoryView({
     mode?: "soft" | "mixed" | "hard";
   } | null>(null);
   const [resetPrompt, setResetPrompt] = useState<string | null>(null);
+
+  /* Live detail elements + their measured heights, keyed by commit hash. */
+  const detailRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const detailHeights = useRef<Map<string, number>>(new Map());
+  /* Bumped after a measurement pass so the shifts re-render with fresh heights. */
+  const [heightTick, setHeightTick] = useState(0);
 
   const loadPage = useCallback(
     async (skip: number): Promise<void> => {
@@ -84,7 +106,6 @@ export function HistoryView({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setSelectedHash(null);
     setDiffTarget(null);
     setQuery("");
     void loadPage(0)
@@ -99,6 +120,14 @@ export function HistoryView({
     };
   }, [loadPage, refreshToken]);
 
+  /* A different repository starts with every detail collapsed. */
+  useEffect(() => {
+    setExpanded(new Set());
+    setDiffTarget(null);
+    detailRefs.current.clear();
+    detailHeights.current.clear();
+  }, [loadPage]);
+
   const loadMore = (): void => {
     if (loadingMore) return;
     setLoadingMore(true);
@@ -106,14 +135,6 @@ export function HistoryView({
       .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoadingMore(false));
   };
-
-  const selected = commits.find((commit) => commit.hash === selectedHash) ?? null;
-
-  // Cherry-pick only shows where it can actually apply — see commit-actions.
-  const cherryPick = useMemo(
-    () => (selectedHash === null ? null : computeCherryPickState(commits, selectedHash, dirty)),
-    [commits, selectedHash, dirty],
-  );
 
   const searchTerm = query.trim().toLowerCase();
   const isSearching = searchTerm !== "";
@@ -133,6 +154,19 @@ export function HistoryView({
     [commits, searchTerm, isSearching],
   );
 
+  // Cumulative height of every open detail before a given display index, so a
+  // row at index i sits at i*ROW_H + offsetByIndex[i] and each dot/link lands on
+  // its (shifted) row. Recomputed whenever a measurement pass bumps heightTick.
+  const offsetByIndex = useMemo(() => {
+    const cumulative = new Array<number>(displayCommits.length + 1).fill(0);
+    displayCommits.forEach((commit, index) => {
+      const height = expanded.has(commit.hash) ? (detailHeights.current.get(commit.hash) ?? 0) : 0;
+      cumulative[index + 1] = cumulative[index] + height;
+    });
+    return cumulative;
+  }, [displayCommits, expanded, heightTick]);
+  const offsetAt = (index: number): number => offsetByIndex[index] ?? 0;
+
   const laneMap = useMemo(() => computeCommitLanes(commits), [commits]);
   const maxLane = useMemo(() => {
     let max = 0;
@@ -144,20 +178,61 @@ export function HistoryView({
   const positions = useMemo(() => {
     const map: Record<string, number> = {};
     commits.forEach((commit, index) => {
-      map[commit.hash] = index * ROW_H + ROW_H / 2;
+      map[commit.hash] = index * ROW_H + ROW_H / 2 + (offsetByIndex[index] ?? 0);
     });
     return map;
-  }, [commits]);
+  }, [commits, offsetByIndex]);
+  const graphHeight = commits.length * ROW_H + (offsetByIndex[commits.length] ?? 0);
   const links = useMemo(
-    () => computeGraphLinks(commits, laneMap, positions, commits.length * ROW_H),
-    [commits, laneMap, positions],
+    () => computeGraphLinks(commits, laneMap, positions, graphHeight),
+    [commits, laneMap, positions, graphHeight],
   );
   const laneX = (lane: number): number => 12 + lane * LANE_STEP;
 
+  // Measure every open detail after each commit (pre-paint) and re-render once
+  // the heights settle, so stacked panels and their following rows realign.
+  useLayoutEffect(() => {
+    let changed = false;
+    for (const commit of displayCommits) {
+      if (!expanded.has(commit.hash)) continue;
+      const element = detailRefs.current.get(commit.hash) ?? null;
+      const height = element?.offsetHeight ?? 0;
+      if ((detailHeights.current.get(commit.hash) ?? 0) !== height) {
+        detailHeights.current.set(commit.hash, height);
+        changed = true;
+      }
+    }
+    if (changed) setHeightTick((tick) => tick + 1);
+  });
+
+  const expandCommit = (hash: string): void => {
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      next.add(hash);
+      return next;
+    });
+  };
+  const collapseCommit = (hash: string): void => {
+    setExpanded((previous) => {
+      if (!previous.has(hash)) return previous;
+      const next = new Set(previous);
+      next.delete(hash);
+      return next;
+    });
+  };
+
+  // Confirm wrapper for a commit's action buttons; the hash is explicit so
+  // several open details each act on their own commit.
+  const askCommit = (hash: string, action: GitAction, message: string, destructive = false): void => {
+    setConfirm({ action, hash, message, destructive });
+  };
+
+  const resetCommit = resetPrompt === null ? null : (commits.find((c) => c.hash === resetPrompt) ?? null);
+
   /* -------------------------------------------------------------- */
-  /* Stage 3: a file inside the selected commit                      */
+  /* Stage 2: diff a file from a commit                              */
   /* -------------------------------------------------------------- */
-  if (diffTarget !== null && selected !== null) {
+  if (diffTarget !== null) {
     return (
       <DiffView
         rootId={rootId}
@@ -169,207 +244,13 @@ export function HistoryView({
   }
 
   /* -------------------------------------------------------------- */
-  /* Stage 2: one commit                                            */
-  /* -------------------------------------------------------------- */
-  if (selected !== null) {
-    const askCommit = (action: GitAction, message: string, destructive = false): void => {
-      setConfirm({ action, hash: selected.hash, message, destructive });
-    };
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0"
-            aria-label="Back to commit graph"
-            onClick={() => setSelectedHash(null)}
-          >
-            <Icon name="ChevronLeft" className="size-4" />
-          </Button>
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={selected.hash}>
-            {selected.shortHash}
-            <span className="ml-1.5 text-muted-foreground">{selected.author}</span>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0"
-            aria-label="Copy commit hash"
-            onClick={() => {
-              void rpc
-                .call("copyTextToClipboard", { text: selected.hash })
-                .then((result) => {
-                  if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
-                })
-                .catch(() => setError("Could not copy to the clipboard."));
-            }}
-          >
-            <Icon name="Copy" className="size-3.5" />
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="border-b border-sidebar-border p-2">
-            <p className="text-xs font-medium text-foreground">{selected.message}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{selected.date}</p>
-            {selected.refs !== undefined && selected.refs.length > 0 ? (
-              <p className="mt-1 flex flex-wrap gap-1">
-                {selected.refs.map((ref) => (
-                  <span key={ref} className="rounded border border-border px-1 text-[9px] text-muted-foreground">
-                    {ref}
-                  </span>
-                ))}
-              </p>
-            ) : null}
-
-            <div className="mt-2 flex flex-wrap gap-1">
-              {selected.refs?.some((ref) => ref.startsWith("HEAD")) === true &&
-              selected.parents.length > 0 ? (
-                <CommitActionButton
-                  label="Undo Commit"
-                  disabled={actionBusy}
-                  onClick={() =>
-                    askCommit(
-                      "undo_commit",
-                      `Undo ${selected.shortHash}? The commit will be removed but all changes stay staged.`,
-                      true,
-                    )
-                  }
-                />
-              ) : null}
-              {cherryPick !== null && cherryPick.show ? (
-                <CommitActionButton
-                  label="Cherry Pick"
-                  disabled={actionBusy || !cherryPick.enabled}
-                  hint={cherryPick.reason}
-                  onClick={() =>
-                    askCommit("cherry_pick", `Cherry Pick ${selected.shortHash} onto the current branch?`)
-                  }
-                />
-              ) : null}
-              <CommitActionButton
-                label="Revert"
-                disabled={actionBusy}
-                onClick={() =>
-                  askCommit("revert_commit", `Create a revert commit for ${selected.shortHash}?`)
-                }
-              />
-              <CommitActionButton
-                label="Reset…"
-                disabled={actionBusy}
-                onClick={() => setResetPrompt(selected.hash)}
-              />
-              <CommitActionButton
-                label="Rebase"
-                disabled={actionBusy}
-                onClick={() =>
-                  askCommit(
-                    "rebase_commit",
-                    `Rebase the current branch onto ${selected.shortHash}? This rewrites commits.`,
-                    true,
-                  )
-                }
-              />
-            </div>
-          </div>
-
-          <div className="py-1">
-            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Files ({selected.files?.length ?? 0})
-            </p>
-            {(selected.files ?? []).length === 0 ? (
-              <p className="px-2 py-1 text-[11px] text-muted-foreground">
-                File list unavailable for this commit.
-              </p>
-            ) : (
-              <FileListView
-                files={selected.files ?? []}
-                viewMode={viewMode}
-                onFileClick={(file) => {
-                  const target: DiffTarget = { kind: "commit", hash: selected.hash, file };
-                  if (onOpenDiff?.(target) === true) return;
-                  setDiffTarget(target);
-                }}
-              />
-            )}
-          </div>
-        </div>
-
-        {confirm !== null ? (
-          <ConfirmDialog
-            message={confirm.message}
-            confirmLabel={
-              confirm.action === "cherry_pick"
-                ? "Cherry Pick"
-                : confirm.action === "revert_commit"
-                  ? "Revert"
-                  : confirm.action === "undo_commit"
-                    ? "Undo"
-                    : confirm.action === "reset_commit"
-                      ? "Reset"
-                      : "Rebase"
-            }
-            destructive={confirm.destructive === true}
-            busy={actionBusy}
-            onCancel={() => setConfirm(null)}
-            onConfirm={() => {
-              const pending = confirm;
-              setConfirm(null);
-              void runAction({
-                action: pending.action,
-                hash: pending.hash,
-                ...(pending.mode !== undefined ? { mode: pending.mode } : {}),
-              }).then((ok) => {
-                if (ok) setSelectedHash(null);
-              });
-            }}
-          />
-        ) : null}
-
-        {resetPrompt !== null ? (
-          <ChoiceDialog
-            message={`Reset to ${selected.shortHash}?`}
-            choices={[
-              { label: "Soft", description: "keep changes staged", value: "soft" },
-              { label: "Mixed", description: "keep changes unstaged", value: "mixed" },
-              { label: "Hard", description: "discard all changes", value: "hard", destructive: true },
-            ]}
-            onCancel={() => setResetPrompt(null)}
-            onChoose={(mode) => {
-              const hash = resetPrompt;
-              setResetPrompt(null);
-              if (mode === "hard") {
-                // Hard reset throws work away — one extra confirmation.
-                setConfirm({
-                  action: "reset_commit",
-                  hash,
-                  mode,
-                  message: `Hard reset to ${selected.shortHash}? ALL uncommitted changes will be lost.`,
-                  destructive: true,
-                });
-              } else {
-                void runAction({ action: "reset_commit", hash, mode: mode as "soft" | "mixed" }).then((ok) => {
-                  if (ok) setSelectedHash(null);
-                });
-              }
-            }}
-          />
-        ) : null}
-      </div>
-    );
-  }
-
-  /* -------------------------------------------------------------- */
-  /* Stage 1: the commit list                                       */
+  /* Stage 1: the commit list, with inline detail panels             */
   /* -------------------------------------------------------------- */
   if (loading && commits.length === 0) {
     return <p className="p-4 text-center text-[11px] text-muted-foreground">Loading commits…</p>;
   }
   if (error !== null && commits.length === 0) {
-    return <p className="p-4 text-[11px] text-destructive">{error}</p>;
+    return <p className="px-2 py-1 text-[11px] text-destructive">{error}</p>;
   }
   if (commits.length === 0) {
     return (
@@ -423,12 +304,15 @@ export function HistoryView({
             ) : null}
           </div>
         ) : (
-          <div className="relative" style={{ height: displayCommits.length * ROW_H }}>
+          <div
+            className="relative"
+            style={{ height: displayCommits.length * ROW_H + offsetAt(displayCommits.length) }}
+          >
             {!isSearching ? (
               <svg
                 className="pointer-events-none absolute left-0 top-0"
                 width={gutterWidth}
-                height={commits.length * ROW_H}
+                height={graphHeight}
                 aria-hidden="true"
               >
                 {links.map((link, index) => (
@@ -457,41 +341,210 @@ export function HistoryView({
               </svg>
             ) : null}
 
-            {displayCommits.map((commit, index) => (
-              <div
-                key={commit.hash}
-                role="button"
-                tabIndex={0}
-                className="group absolute left-0 right-0 cursor-pointer px-2 transition-colors hover:bg-state-hover"
-                style={{ top: index * ROW_H, height: ROW_H, paddingLeft: isSearching ? 2 : gutterWidth + 6 }}
-                onClick={() => setSelectedHash(commit.hash)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") setSelectedHash(commit.hash);
-                }}
-                title={commit.message}
-              >
-                <div className="flex h-full flex-col justify-center gap-0.5 overflow-hidden">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-[11px] font-medium text-foreground">
-                      {commit.message}
-                    </span>
-                  </div>
-                  <div className="flex min-w-0 items-center gap-1.5 text-[9px] text-muted-foreground">
-                    <span className="shrink-0 font-mono">{commit.shortHash}</span>
-                    <span className="truncate">{commit.author}</span>
-                    <span className="shrink-0">{commit.date}</span>
-                    {(commit.refs ?? []).map((ref) => (
-                      <span
-                        key={ref}
-                        className="shrink-0 rounded border border-border px-1 text-[8px] text-primary"
+            {displayCommits.map((commit, index) => {
+              const isOpen = expanded.has(commit.hash);
+              const cherryPick = isOpen ? computeCherryPickState(commits, commit.hash, dirty) : null;
+              return (
+                <Fragment key={commit.hash}>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className={
+                          "group absolute left-0 right-0 cursor-pointer px-2 transition-colors " +
+                          (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
+                        }
+                        style={{
+                          top: index * ROW_H + offsetAt(index),
+                          height: ROW_H,
+                          paddingLeft: isSearching ? 2 : gutterWidth + 6,
+                        }}
+                        onClick={() => (isOpen ? collapseCommit(commit.hash) : expandCommit(commit.hash))}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          if (isOpen) collapseCommit(commit.hash);
+                          else expandCommit(commit.hash);
+                        }}
+                        title={commit.message}
                       >
-                        {ref}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
+                        <div className="flex h-full min-w-0 items-center gap-1.5 overflow-hidden">
+                          <Icon
+                            name={isOpen ? "ChevronDown" : "ChevronRight"}
+                            className="size-3 shrink-0 text-muted-foreground"
+                          />
+                          <div className="min-w-0 flex-col flex-1">
+                            <div className="flex min-w-0 items-center">
+                              <span className="truncate text-[11px] font-medium text-foreground">
+                                {commit.message}
+                              </span>
+                            </div>
+                            <div className="flex min-w-0 items-center gap-1.5 text-[9px] text-muted-foreground">
+                              <span className="shrink-0 font-mono">{commit.shortHash}</span>
+                              <span className="truncate">{commit.author}</span>
+                              <span className="shrink-0">{commit.date}</span>
+                              {(commit.refs ?? []).map((ref) => (
+                                <span
+                                  key={ref}
+                                  className="shrink-0 rounded border border-border px-1 text-[8px] text-primary"
+                                >
+                                  {ref}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-56">
+                      <ContextMenuItem
+                        onSelect={() => {
+                          void rpc
+                            .call("copyTextToClipboard", { text: commit.hash })
+                            .then((result) => {
+                              if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
+                            })
+                            .catch(() => setError("Could not copy to the clipboard."));
+                        }}
+                        disabled={actionBusy}
+                      >
+                        Copy commit hash
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+
+                  {isOpen ? (
+                    <div
+                      ref={(element) => {
+                        if (element !== null) detailRefs.current.set(commit.hash, element);
+                        else detailRefs.current.delete(commit.hash);
+                      }}
+                      className="absolute border-y border-sidebar-border bg-state-hover/40"
+                      style={{
+                        left: 0,
+                        right: 0,
+                        top: (index + 1) * ROW_H + offsetAt(index),
+                        height: "auto",
+                        paddingLeft: isSearching ? 2 : gutterWidth + 6,
+                      }}
+                    >
+                      {/* Header: collapse + short hash + author. Copy is on the row's context menu. */}
+                      <div className="flex items-center gap-1.5 border-b border-sidebar-border pr-2 py-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 shrink-0"
+                          aria-label="Collapse commit detail"
+                          onClick={() => collapseCommit(commit.hash)}
+                        >
+                          <Icon name="ChevronUp" className="size-4" />
+                        </Button>
+                        <span
+                          className="min-w-0 truncate font-mono text-[11px] text-foreground"
+                          title={commit.hash}
+                        >
+                          {commit.shortHash}
+                          <span className="ml-1.5 text-muted-foreground">{commit.author}</span>
+                        </span>
+                      </div>
+
+                      <div className="pr-2 py-1">
+                        <p className="text-xs font-medium text-foreground">{commit.message}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">{commit.date}</p>
+                        {commit.refs !== undefined && commit.refs.length > 0 ? (
+                          <p className="mt-1 flex flex-wrap gap-1">
+                            {commit.refs.map((ref) => (
+                              <span
+                                key={ref}
+                                className="shrink-0 rounded border border-border px-1 text-[9px] text-muted-foreground"
+                              >
+                                {ref}
+                              </span>
+                            ))}
+                          </p>
+                        ) : null}
+
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {commit.refs?.some((ref) => ref.startsWith("HEAD")) === true &&
+                          commit.parents.length > 0 ? (
+                            <CommitActionButton
+                              label="Undo Commit"
+                              disabled={actionBusy}
+                              onClick={() =>
+                                askCommit(
+                                  commit.hash,
+                                  "undo_commit",
+                                  `Undo ${commit.shortHash}? The commit will be removed but all changes stay staged.`,
+                                  true,
+                                )
+                              }
+                            />
+                          ) : null}
+                          {cherryPick !== null && cherryPick.show ? (
+                            <CommitActionButton
+                              label="Cherry Pick"
+                              disabled={actionBusy || !cherryPick.enabled}
+                              hint={cherryPick.reason}
+                              onClick={() =>
+                                askCommit(commit.hash, "cherry_pick", `Cherry Pick ${commit.shortHash} onto the current branch?`)
+                              }
+                            />
+                          ) : null}
+                          <CommitActionButton
+                            label="Revert"
+                            disabled={actionBusy}
+                            onClick={() =>
+                              askCommit(commit.hash, "revert_commit", `Create a revert commit for ${commit.shortHash}?`)
+                            }
+                          />
+                          <CommitActionButton
+                            label="Reset…"
+                            disabled={actionBusy}
+                            onClick={() => setResetPrompt(commit.hash)}
+                          />
+                          <CommitActionButton
+                            label="Rebase"
+                            disabled={actionBusy}
+                            onClick={() =>
+                              askCommit(
+                                commit.hash,
+                                "rebase_commit",
+                                `Rebase the current branch onto ${commit.shortHash}? This rewrites commits.`,
+                                true,
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pr-2 py-1">
+                        <p className="pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Files ({commit.files?.length ?? 0})
+                        </p>
+                        {(commit.files ?? []).length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            File list unavailable for this commit.
+                          </p>
+                        ) : (
+                          <div className="max-h-72 overflow-y-auto">
+                            <FileListView
+                              files={commit.files ?? []}
+                              viewMode={viewMode}
+                              onFileClick={(file) => {
+                                const target: DiffTarget = { kind: "commit", hash: commit.hash, file };
+                                if (onOpenDiff?.(target) === true) return;
+                                setDiffTarget(target);
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </div>
         )}
 
@@ -503,6 +556,67 @@ export function HistoryView({
           </div>
         ) : null}
       </div>
+
+      {confirm !== null ? (
+        <ConfirmDialog
+          message={confirm.message}
+          confirmLabel={
+            confirm.action === "cherry_pick"
+              ? "Cherry Pick"
+              : confirm.action === "revert_commit"
+                ? "Revert"
+                : confirm.action === "undo_commit"
+                  ? "Undo"
+                  : confirm.action === "reset_commit"
+                    ? "Reset"
+                    : "Rebase"
+          }
+          destructive={confirm.destructive === true}
+          busy={actionBusy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const pending = confirm;
+            setConfirm(null);
+            void runAction({
+              action: pending.action,
+              hash: pending.hash,
+              ...(pending.mode !== undefined ? { mode: pending.mode } : {}),
+            }).then((ok) => {
+              if (ok) collapseCommit(pending.hash);
+            });
+          }}
+        />
+      ) : null}
+
+      {resetPrompt !== null && resetCommit !== null ? (
+        <ChoiceDialog
+          message={`Reset to ${resetCommit.shortHash}?`}
+          choices={[
+            { label: "Soft", description: "keep changes staged", value: "soft" },
+            { label: "Mixed", description: "keep changes unstaged", value: "mixed" },
+            { label: "Hard", description: "discard all changes", value: "hard", destructive: true },
+          ]}
+          onCancel={() => setResetPrompt(null)}
+          onChoose={(mode) => {
+            const hash = resetPrompt;
+            setResetPrompt(null);
+            if (mode === "hard") {
+              // Hard reset throws work away — one extra confirmation.
+              setConfirm({
+                action: "reset_commit",
+                hash,
+                mode,
+                message: `Hard reset to ${resetCommit.shortHash}? ALL uncommitted changes will be lost.`,
+                destructive: true,
+              });
+            } else {
+              void runAction({ action: "reset_commit", hash, mode: mode as "soft" | "mixed" }).then((ok) => {
+                if (ok) collapseCommit(hash);
+              });
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

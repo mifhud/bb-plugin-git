@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
@@ -14,13 +20,13 @@ import { type ViewMode } from "@/components/ChangesList";
  * Mutations run through the rail's `runAction`; a successful run bumps
  * `refreshToken`, which reloads the list here.
  *
- * Layout mirrors HistoryView's 3-stage list → detail → diff:
- *  - Stage 1: a CommitBox-style push input, then the stash list.
- *  - Stage 2: a stash detail — index + copy button in the header, then
- *    message + branch/hash + apply/pop/drop actions + file list in the body.
- *  - Stage 3: DiffView for a single file in the expanded stash.
- * Action buttons live in Stage 2 (detail), not the list, so a glance at
- * the list is just stash identities — same visual density as HistoryView.
+ * Clicking a stash row expands its detail inline, directly beneath that row
+ * (show/hide, like a tree dropdown) — no view switch. Any number of rows can be
+ * open at once and opening one never closes another. The panel shows the stash
+ * identity, apply/pop/drop and a file list in its own scroll area, so a large
+ * stash stays compact. Right-click a row opens a context menu with
+ * "Copy stash ref". A file click opens a diff — a side-panel tab (when a thread
+ * navigator is registered) or the in-rail DiffView drawer.
  */
 export function StashList({
   rootId,
@@ -49,16 +55,19 @@ export function StashList({
     message: string;
     confirmLabel: string;
     destructive: boolean;
+    stashRef: string;
     run: () => Promise<boolean>;
   } | null>(null);
 
   /* Inline stash input — a textarea, styled exactly like CommitBox. */
   const [stashMessage, setStashMessage] = useState("");
-  /* 3-stage navigation (list → detail → diff). */
-  const [expandedStash, setExpandedStash] = useState<GitStash | null>(null);
-  const [stashFiles, setStashFiles] = useState<GitStashFile[]>([]);
-  const [stashFilesLoading, setStashFilesLoading] = useState(false);
-  const [diffFile, setDiffFile] = useState<string | null>(null);
+  /* Refs of stashes whose detail is expanded inline; several may be open. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  /* File list per stash ref, loaded the first time that stash is expanded. */
+  const [filesByRef, setFilesByRef] = useState<Record<string, GitStashFile[]>>({});
+  const [loadingByRef, setLoadingByRef] = useState<Record<string, boolean>>({});
+  /* The file opened in the in-rail diff (used when no side-panel target exists). */
+  const [diffTarget, setDiffTarget] = useState<{ stash: string; file: string } | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -73,15 +82,15 @@ export function StashList({
   }, [rpc, rootId, repo]);
 
   const loadFiles = useCallback(
-    async (stash: GitStash): Promise<void> => {
-      setStashFilesLoading(true);
+    async (ref: string): Promise<void> => {
+      setLoadingByRef((map) => ({ ...map, [ref]: true }));
       try {
-        const result = await rpc.call("stashFiles", { rootId, repo, stash: stash.ref });
-        setStashFiles(result.files);
+        const result = await rpc.call("stashFiles", { rootId, repo, stash: ref });
+        setFilesByRef((map) => ({ ...map, [ref]: result.files }));
       } catch {
-        setStashFiles([]);
+        setFilesByRef((map) => ({ ...map, [ref]: [] }));
       } finally {
-        setStashFilesLoading(false);
+        setLoadingByRef((map) => ({ ...map, [ref]: false }));
       }
     },
     [rpc, rootId, repo],
@@ -92,17 +101,38 @@ export function StashList({
     void load();
   }, [load, refreshToken]);
 
-  /* Fetch the file list when a stash is expanded. */
+  /* A different repository starts with every detail collapsed. */
   useEffect(() => {
-    if (expandedStash !== null) {
-      void loadFiles(expandedStash);
-    }
-  }, [expandedStash, loadFiles]);
+    setExpanded(new Set());
+    setDiffTarget(null);
+  }, [rootId, repo]);
 
-  /* Collapsing the stash detail resets the file selection too. */
+  /* Drop expanded refs whose stash is gone (popped or dropped). */
   useEffect(() => {
-    if (expandedStash === null) setDiffFile(null);
-  }, [expandedStash]);
+    setExpanded((previous) => {
+      const live = new Set(stashes.map((stash) => stash.ref));
+      const next = new Set([...previous].filter((ref) => live.has(ref)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [stashes]);
+
+  const openStash = (stash: GitStash): void => {
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      next.add(stash.ref);
+      return next;
+    });
+    if (filesByRef[stash.ref] === undefined) void loadFiles(stash.ref);
+  };
+
+  const closeStash = (ref: string): void => {
+    setExpanded((previous) => {
+      if (!previous.has(ref)) return previous;
+      const next = new Set(previous);
+      next.delete(ref);
+      return next;
+    });
+  };
 
   const handlePush = (): void => {
     if (actionBusy) return;
@@ -116,164 +146,21 @@ export function StashList({
   }
 
   /* -------------------------------------------------------------- */
-  /* Stage 3: a file inside the expanded stash                      */
+  /* Stage 2: a file inside a stash                                  */
   /* -------------------------------------------------------------- */
-  if (diffFile !== null && expandedStash !== null) {
+  if (diffTarget !== null) {
     return (
       <DiffView
         rootId={rootId}
         repo={repo}
-        target={{ kind: "stash", stash: expandedStash.ref, file: diffFile }}
-        onBack={() => setDiffFile(null)}
+        target={{ kind: "stash", stash: diffTarget.stash, file: diffTarget.file }}
+        onBack={() => setDiffTarget(null)}
       />
     );
   }
 
   /* -------------------------------------------------------------- */
-  /* Stage 2: stash detail — index, message, actions, files          */
-  /* -------------------------------------------------------------- */
-  if (expandedStash !== null) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Header: back + index + copy ref (mirrors HistoryView's hash header) */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-1.5 py-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6 shrink-0"
-              aria-label="Back"
-              onClick={() => setExpandedStash(null)}
-            >
-              <Icon name="ChevronLeft" className="size-4" />
-            </Button>
-            <span
-              className="min-w-0 truncate font-mono text-[11px] text-foreground"
-              title={expandedStash.ref}
-            >
-              {expandedStash.ref}
-            </span>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0"
-            aria-label={`Copy ${expandedStash.ref}`}
-            onClick={() => {
-              void rpc
-                .call("copyTextToClipboard", { text: expandedStash.ref })
-                .catch(() => undefined);
-            }}
-          >
-            <Icon name="Copy" className="size-3.5" />
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* Stash info: message + branch/hash + actions, then file list */}
-          <div className="border-b border-sidebar-border p-2">
-            <p className="text-xs font-medium text-foreground">{expandedStash.message}</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span
-                className="shrink-0 rounded border border-border px-1 text-[9px] text-muted-foreground"
-                title={expandedStash.branch || undefined}
-              >
-                {expandedStash.branch || "HEAD"}
-              </span>
-              {expandedStash.hash !== undefined ? (
-                <span
-                  className="shrink-0 font-mono text-[9px] text-muted-foreground"
-                  title={expandedStash.hash}
-                >
-                  {expandedStash.hash}
-                </span>
-              ) : null}
-            </div>
-
-            {/* Apply / Pop / Drop — same outline style as HistoryView's commit actions */}
-            <div className="mt-2 flex flex-wrap gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-[10px]"
-                disabled={actionBusy}
-                onClick={() =>
-                  setConfirm({
-                    message: `Apply ${expandedStash.ref}?`,
-                    confirmLabel: "Apply",
-                    destructive: false,
-                    run: () => runAction({ action: "stash_apply", stash: expandedStash.ref }),
-                  })
-                }
-              >
-                Apply
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-[10px]"
-                disabled={actionBusy}
-                onClick={() =>
-                  setConfirm({
-                    message: `Pop ${expandedStash.ref}?`,
-                    confirmLabel: "Pop",
-                    destructive: false,
-                    run: () => runAction({ action: "stash_pop", stash: expandedStash.ref }),
-                  })
-                }
-              >
-                Pop
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 px-2 text-[10px] text-destructive"
-                disabled={actionBusy}
-                onClick={() =>
-                  setConfirm({
-                    message: `Drop ${expandedStash.ref}? This cannot be undone.`,
-                    confirmLabel: "Drop",
-                    destructive: true,
-                    run: () => runAction({ action: "stash_drop", stash: expandedStash.ref }),
-                  })
-                }
-              >
-                Drop
-              </Button>
-            </div>
-          </div>
-
-          {/* File list */}
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Files ({stashFiles.length})
-          </p>
-          {stashFilesLoading ? (
-            <p className="p-4 text-center text-[11px] text-muted-foreground">Loading files…</p>
-          ) : stashFiles.length === 0 ? (
-            <p className="p-4 text-center text-[11px] text-muted-foreground">No files in this stash.</p>
-          ) : (
-            <FileListView
-              files={stashFiles}
-              viewMode={viewMode}
-              onFileClick={(file) => {
-                const target: DiffTarget = { kind: "stash", stash: expandedStash.ref, file };
-                if (onOpenDiff?.(target) === true) return;
-                setDiffFile(file);
-              }}
-            />
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  /* -------------------------------------------------------------- */
-  /* Stage 1: stash list with a CommitBox-style push input           */
+  /* Stage 1: push input + stash list with inline details            */
   /* -------------------------------------------------------------- */
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -295,9 +182,7 @@ export function StashList({
           className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="truncate text-[10px] text-muted-foreground">
-            Stash tracked changes
-          </span>
+          <span className="truncate text-[10px] text-muted-foreground">Stash tracked changes</span>
           <Button
             type="button"
             size="sm"
@@ -318,37 +203,197 @@ export function StashList({
             <p className="text-xs text-muted-foreground">No stashed changes.</p>
           </div>
         ) : (
-          stashes.map((stash) => (
-            <div key={stash.ref} className="flex min-w-0 items-center px-2 py-1.5">
-              <div
-                role="button"
-                tabIndex={0}
-                className="min-w-0 flex-1 cursor-pointer items-center gap-1.5"
-                onClick={() => setExpandedStash(stash)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") setExpandedStash(stash);
-                }}
-              >
-                <span
-                  className="shrink-0 rounded border border-border px-1 text-[8px] text-muted-foreground"
-                  title={stash.branch || undefined}
-                >
-                  {stash.branch || "HEAD"}
-                </span>
-                <span className="truncate text-[11px] font-medium text-foreground" title={stash.message}>
-                  {stash.message}
-                </span>
-                {stash.hash !== undefined ? (
-                  <span
-                    className="shrink-0 font-mono text-[9px] text-muted-foreground"
-                    title={stash.hash}
-                  >
-                    {stash.hash}
-                  </span>
+          stashes.map((stash) => {
+            const isOpen = expanded.has(stash.ref);
+            const files = filesByRef[stash.ref] ?? [];
+            const filesLoading = loadingByRef[stash.ref] === true;
+            return (
+              <Fragment key={stash.ref}>
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={
+                        "flex min-w-0 cursor-pointer items-center gap-1.5 px-2 py-1.5 " +
+                        (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
+                      }
+                      onClick={() => (isOpen ? closeStash(stash.ref) : openStash(stash))}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        if (isOpen) closeStash(stash.ref);
+                        else openStash(stash);
+                      }}
+                      title={stash.message}
+                    >
+                      <Icon
+                        name={isOpen ? "ChevronDown" : "ChevronRight"}
+                        className="size-3 shrink-0 text-muted-foreground"
+                      />
+                      <span
+                        className="shrink-0 rounded border border-border px-1 text-[8px] text-muted-foreground"
+                        title={stash.branch || undefined}
+                      >
+                        {stash.branch || "HEAD"}
+                      </span>
+                      <span
+                        className="min-w-0 truncate text-[11px] font-medium text-foreground"
+                        title={stash.message}
+                      >
+                        {stash.message}
+                      </span>
+                      {stash.hash !== undefined ? (
+                        <span
+                          className="shrink-0 font-mono text-[9px] text-muted-foreground"
+                          title={stash.hash}
+                        >
+                          {stash.hash}
+                        </span>
+                      ) : null}
+                    </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-56">
+                    <ContextMenuItem
+                      onSelect={() => {
+                        void rpc
+                          .call("copyTextToClipboard", { text: stash.ref })
+                          .catch(() => undefined);
+                      }}
+                      disabled={actionBusy}
+                    >
+                      Copy stash ref
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+
+                {isOpen ? (
+                  <div className="border-b border-sidebar-border bg-state-hover/40 pb-1">
+                    {/* Header: collapse + ref. Copy moved to the row's context menu. */}
+                    <div className="flex items-center gap-1.5 px-1.5 py-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0"
+                        aria-label="Collapse stash detail"
+                        onClick={() => closeStash(stash.ref)}
+                      >
+                        <Icon name="ChevronUp" className="size-4" />
+                      </Button>
+                      <span
+                        className="min-w-0 truncate font-mono text-[11px] text-foreground"
+                        title={stash.ref}
+                      >
+                        {stash.ref}
+                      </span>
+                    </div>
+
+                    <div className="px-2 py-1">
+                      <p className="text-xs font-medium text-foreground">{stash.message}</p>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span
+                          className="shrink-0 rounded border border-border px-1 text-[9px] text-muted-foreground"
+                          title={stash.branch || undefined}
+                        >
+                          {stash.branch || "HEAD"}
+                        </span>
+                        {stash.hash !== undefined ? (
+                          <span
+                            className="shrink-0 font-mono text-[9px] text-muted-foreground"
+                            title={stash.hash}
+                          >
+                            {stash.hash}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Apply / Pop / Drop — same outline style as HistoryView's commit actions */}
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            setConfirm({
+                              message: `Apply ${stash.ref}?`,
+                              confirmLabel: "Apply",
+                              destructive: false,
+                              stashRef: stash.ref,
+                              run: () => runAction({ action: "stash_apply", stash: stash.ref }),
+                            })
+                          }
+                        >
+                          Apply
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            setConfirm({
+                              message: `Pop ${stash.ref}?`,
+                              confirmLabel: "Pop",
+                              destructive: false,
+                              stashRef: stash.ref,
+                              run: () => runAction({ action: "stash_pop", stash: stash.ref }),
+                            })
+                          }
+                        >
+                          Pop
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] text-destructive"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            setConfirm({
+                              message: `Drop ${stash.ref}? This cannot be undone.`,
+                              confirmLabel: "Drop",
+                              destructive: true,
+                              stashRef: stash.ref,
+                              run: () => runAction({ action: "stash_drop", stash: stash.ref }),
+                            })
+                          }
+                        >
+                          Drop
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* File list — its own scroll area keeps a big stash compact. */}
+                    <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Files ({files.length})
+                    </p>
+                    <div className="max-h-72 overflow-y-auto">
+                      {filesLoading ? (
+                        <p className="p-4 text-center text-[11px] text-muted-foreground">Loading files…</p>
+                      ) : files.length === 0 ? (
+                        <p className="p-4 text-center text-[11px] text-muted-foreground">
+                          No files in this stash.
+                        </p>
+                      ) : (
+                        <FileListView
+                          files={files}
+                          viewMode={viewMode}
+                          onFileClick={(file) => {
+                            const target: DiffTarget = { kind: "stash", stash: stash.ref, file };
+                            if (onOpenDiff?.(target) === true) return;
+                            setDiffTarget({ stash: stash.ref, file });
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-            </div>
-          ))
+              </Fragment>
+            );
+          })
         )}
       </div>
 
@@ -362,7 +407,9 @@ export function StashList({
           onConfirm={() => {
             const pending = confirm;
             setConfirm(null);
-            void pending.run();
+            void pending.run().then((ok) => {
+              if (ok) closeStash(pending.stashRef);
+            });
           }}
         />
       ) : null}
