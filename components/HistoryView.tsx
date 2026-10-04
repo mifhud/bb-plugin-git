@@ -1,11 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -26,9 +20,9 @@ import { type ViewMode } from "@/components/ChangesList";
  * Graph tab: commits with a lane graph gutter. Clicking a commit expands an
  * inline detail directly beneath that row (show/hide, like a tree dropdown) —
  * no stage switch, and any number of rows can be open at once without closing
- * the others. The panel shows the commit message, refs, commit-level actions
- * (cherry-pick, revert, reset, undo, rebase) and a file list whose diffs open
- * as side-panel tabs or an in-rail drawer.
+ * the others. The panel shows the commit message, refs, a copy-hash button,
+ * commit-level actions (cherry-pick, revert, reset, undo, rebase) and a file
+ * list whose diffs open as side-panel tabs or an in-rail drawer.
  *
  * Rows are absolutely positioned over a fixed-height SVG graph, so the detail
  * sits on its own layer right under the clicked row and every row/dot/link
@@ -346,72 +340,53 @@ export function HistoryView({
               const cherryPick = isOpen ? computeCherryPickState(commits, commit.hash, dirty) : null;
               return (
                 <Fragment key={commit.hash}>
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        className={
-                          "group absolute left-0 right-0 cursor-pointer px-2 transition-colors " +
-                          (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
-                        }
-                        style={{
-                          top: index * ROW_H + offsetAt(index),
-                          height: ROW_H,
-                          paddingLeft: isSearching ? 2 : gutterWidth + 6,
-                        }}
-                        onClick={() => (isOpen ? collapseCommit(commit.hash) : expandCommit(commit.hash))}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") return;
-                          if (isOpen) collapseCommit(commit.hash);
-                          else expandCommit(commit.hash);
-                        }}
-                        title={commit.message}
-                      >
-                        <div className="flex h-full min-w-0 items-center gap-1.5 overflow-hidden">
-                          <Icon
-                            name={isOpen ? "ChevronDown" : "ChevronRight"}
-                            className="size-3 shrink-0 text-muted-foreground"
-                          />
-                          <div className="min-w-0 flex-col flex-1">
-                            <div className="flex min-w-0 items-center">
-                              <span className="truncate text-[11px] font-medium text-foreground">
-                                {commit.message}
-                              </span>
-                            </div>
-                            <div className="flex min-w-0 items-center gap-1.5 text-[9px] text-muted-foreground">
-                              <span className="shrink-0 font-mono">{commit.shortHash}</span>
-                              <span className="truncate">{commit.author}</span>
-                              <span className="shrink-0">{commit.date}</span>
-                              {(commit.refs ?? []).map((ref) => (
-                                <span
-                                  key={ref}
-                                  className="shrink-0 rounded border border-border px-1 text-[8px] text-primary"
-                                >
-                                  {ref}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={
+                      "group absolute left-0 right-0 cursor-pointer px-2 transition-colors " +
+                      (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
+                    }
+                    style={{
+                      top: index * ROW_H + offsetAt(index),
+                      height: ROW_H,
+                      paddingLeft: isSearching ? 2 : gutterWidth + 6,
+                    }}
+                    onClick={() => (isOpen ? collapseCommit(commit.hash) : expandCommit(commit.hash))}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      if (isOpen) collapseCommit(commit.hash);
+                      else expandCommit(commit.hash);
+                    }}
+                    title={commit.message}
+                  >
+                    <div className="flex h-full min-w-0 items-center gap-1.5 overflow-hidden">
+                      <Icon
+                        name={isOpen ? "ChevronDown" : "ChevronRight"}
+                        className="size-3 shrink-0 text-muted-foreground"
+                      />
+                      <div className="min-w-0 flex-col flex-1">
+                        <div className="flex min-w-0 items-center">
+                          <span className="truncate text-[11px] font-medium text-foreground">
+                            {commit.message}
+                          </span>
+                        </div>
+                        <div className="flex min-w-0 items-center gap-1.5 text-[9px] text-muted-foreground">
+                          <span className="shrink-0 font-mono">{commit.shortHash}</span>
+                          <span className="truncate">{commit.author}</span>
+                          <span className="shrink-0">{commit.date}</span>
+                          {(commit.refs ?? []).map((ref) => (
+                            <span
+                              key={ref}
+                              className="shrink-0 rounded border border-border px-1 text-[8px] text-primary"
+                            >
+                              {ref}
+                            </span>
+                          ))}
                         </div>
                       </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent className="w-56">
-                      <ContextMenuItem
-                        onSelect={() => {
-                          void rpc
-                            .call("copyTextToClipboard", { text: commit.hash })
-                            .then((result) => {
-                              if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
-                            })
-                            .catch(() => setError("Could not copy to the clipboard."));
-                        }}
-                        disabled={actionBusy}
-                      >
-                        Copy commit hash
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
+                    </div>
+                  </div>
 
                   {isOpen ? (
                     <div
@@ -428,7 +403,7 @@ export function HistoryView({
                         paddingLeft: isSearching ? 2 : gutterWidth + 6,
                       }}
                     >
-                      {/* Header: collapse + short hash + author. Copy is on the row's context menu. */}
+                      {/* Header: collapse + short hash + author + copy hash to clipboard. */}
                       <div className="flex items-center gap-1.5 border-b border-sidebar-border pr-2 py-1">
                         <Button
                           type="button"
@@ -447,6 +422,24 @@ export function HistoryView({
                           {commit.shortHash}
                           <span className="ml-1.5 text-muted-foreground">{commit.author}</span>
                         </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 shrink-0 ml-auto"
+                          aria-label="Copy commit hash"
+                          disabled={actionBusy}
+                          onClick={() => {
+                            void rpc
+                              .call("copyTextToClipboard", { text: commit.hash })
+                              .then((result) => {
+                                if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
+                              })
+                              .catch(() => setError("Could not copy to the clipboard."));
+                          }}
+                        >
+                          <Icon name="Copy" className="size-3.5" />
+                        </Button>
                       </div>
 
                       <div className="pr-2 py-1">

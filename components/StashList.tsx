@@ -1,11 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
@@ -24,9 +18,10 @@ import { type ViewMode } from "@/components/ChangesList";
  * (show/hide, like a tree dropdown) — no view switch. Any number of rows can be
  * open at once and opening one never closes another. The panel shows the stash
  * identity, apply/pop/drop and a file list in its own scroll area, so a large
- * stash stays compact. Right-click a row opens a context menu with
- * "Copy stash ref". A file click opens a diff — a side-panel tab (when a thread
- * navigator is registered) or the in-rail DiffView drawer.
+ * stash stays compact. The detail header (expanded inline beneath the row)
+ * holds apply/pop/drop and a "Copy stash ref" button. A file click opens a diff
+ * — a side-panel tab (when a thread navigator is registered) or the in-rail
+ * DiffView drawer.
  */
 export function StashList({
   rootId,
@@ -209,66 +204,50 @@ export function StashList({
             const filesLoading = loadingByRef[stash.ref] === true;
             return (
               <Fragment key={stash.ref}>
-                <ContextMenu>
-                  <ContextMenuTrigger asChild>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={
-                        "flex min-w-0 cursor-pointer items-center gap-1.5 px-2 py-1.5 " +
-                        (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
-                      }
-                      onClick={() => (isOpen ? closeStash(stash.ref) : openStash(stash))}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        if (isOpen) closeStash(stash.ref);
-                        else openStash(stash);
-                      }}
-                      title={stash.message}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={
+                    "flex min-w-0 cursor-pointer items-center gap-1.5 px-2 py-1.5 " +
+                    (isOpen ? "bg-state-hover" : "hover:bg-state-hover")
+                  }
+                  onClick={() => (isOpen ? closeStash(stash.ref) : openStash(stash))}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    if (isOpen) closeStash(stash.ref);
+                    else openStash(stash);
+                  }}
+                  title={stash.message}
+                >
+                  <Icon
+                    name={isOpen ? "ChevronDown" : "ChevronRight"}
+                    className="size-3 shrink-0 text-muted-foreground"
+                  />
+                  <span
+                    className="shrink-0 rounded border border-border px-1 text-[8px] text-muted-foreground"
+                    title={stash.branch || undefined}
+                  >
+                    {stash.branch || "HEAD"}
+                  </span>
+                  <span
+                    className="min-w-0 truncate text-[11px] font-medium text-foreground"
+                    title={stash.message}
+                  >
+                    {stash.message}
+                  </span>
+                  {stash.hash !== undefined ? (
+                    <span
+                      className="shrink-0 font-mono text-[9px] text-muted-foreground"
+                      title={stash.hash}
                     >
-                      <Icon
-                        name={isOpen ? "ChevronDown" : "ChevronRight"}
-                        className="size-3 shrink-0 text-muted-foreground"
-                      />
-                      <span
-                        className="shrink-0 rounded border border-border px-1 text-[8px] text-muted-foreground"
-                        title={stash.branch || undefined}
-                      >
-                        {stash.branch || "HEAD"}
-                      </span>
-                      <span
-                        className="min-w-0 truncate text-[11px] font-medium text-foreground"
-                        title={stash.message}
-                      >
-                        {stash.message}
-                      </span>
-                      {stash.hash !== undefined ? (
-                        <span
-                          className="shrink-0 font-mono text-[9px] text-muted-foreground"
-                          title={stash.hash}
-                        >
-                          {stash.hash}
-                        </span>
-                      ) : null}
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-56">
-                    <ContextMenuItem
-                      onSelect={() => {
-                        void rpc
-                          .call("copyTextToClipboard", { text: stash.ref })
-                          .catch(() => undefined);
-                      }}
-                      disabled={actionBusy}
-                    >
-                      Copy stash ref
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
+                      {stash.hash}
+                    </span>
+                  ) : null}
+                </div>
 
                 {isOpen ? (
                   <div className="border-b border-sidebar-border bg-state-hover/40 pb-1">
-                    {/* Header: collapse + ref. Copy moved to the row's context menu. */}
+                    {/* Header: collapse + ref + copy stash ref to clipboard. */}
                     <div className="flex items-center gap-1.5 px-1.5 py-1">
                       <Button
                         type="button"
@@ -286,6 +265,21 @@ export function StashList({
                       >
                         {stash.ref}
                       </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0 ml-auto"
+                        aria-label="Copy stash ref"
+                        disabled={actionBusy}
+                        onClick={() => {
+                          void rpc
+                            .call("copyTextToClipboard", { text: stash.ref })
+                            .catch(() => undefined);
+                        }}
+                      >
+                        <Icon name="Copy" className="size-3.5" />
+                      </Button>
                     </div>
 
                     <div className="px-2 py-1">
