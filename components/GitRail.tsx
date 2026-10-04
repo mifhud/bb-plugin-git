@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useBbContext, useBbNavigate, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useIsCompactViewport } from "@/components/ui/hooks/use-compact-viewport";
 import { BranchToolbar } from "@/components/BranchToolbar";
 import { ChangesList, readStoredViewMode, writeStoredViewMode, type ViewMode } from "@/components/ChangesList";
@@ -436,26 +437,21 @@ export function GitRail() {
 
       {/* Workspace root selector */}
       <div className="flex shrink-0 items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
-        <select
-          aria-label="Git workspace folder"
-          title="Pinned workspace — switching threads does not change this panel"
-          value={selectedId ?? ""}
-          onChange={(event) => {
-            const id = event.target.value;
+        <SearchableSelect
+          ariaLabel="Git workspace folder"
+          triggerTitle="Pinned workspace — switching threads does not change this panel"
+          value={selectedId}
+          onValueChange={(id) => {
             setSelectedId(id);
             writePinnedRoot(id);
           }}
-          className="min-w-0 flex-1 truncate bg-sidebar text-[11px] text-sidebar-foreground outline-none"
-        >
-          {selectedId === null || chosen === null ? (
-            <option value={selectedId ?? ""}>Choose a folder</option>
-          ) : null}
-          {choices.map((choice) => (
-            <option key={choice.id} value={choice.id}>
-              {choice.label}
-            </option>
-          ))}
-        </select>
+          placeholder="Choose a folder"
+          searchPlaceholder="Search projects…"
+          options={choices.map((choice) => ({
+            value: choice.id,
+            label: choice.label,
+          }))}
+        />
         <button
           type="button"
           aria-label="Refresh folder list"
@@ -469,22 +465,21 @@ export function GitRail() {
 
       {/* Repository selector (nested repos) */}
       <div className="flex shrink-0 items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
-        <select
-          aria-label="Repository"
-          title="Repository inside the workspace"
+        <SearchableSelect
+          ariaLabel="Repository"
+          triggerTitle="Repository inside the workspace"
           value={repo}
-          onChange={(event) => {
-            setRepo(event.target.value);
+          onValueChange={(value) => {
+            setRepo(value);
             setDiffFile(null);
           }}
-          className="min-w-0 flex-1 truncate bg-sidebar text-[11px] text-sidebar-foreground outline-none"
-        >
-          {repos.map((value) => (
-            <option key={value} value={value}>
-              {value === "." ? `${chosen?.workspace.rootName ?? "."} (root)` : value}
-            </option>
-          ))}
-        </select>
+          placeholder={repos.length === 0 ? "No repositories" : undefined}
+          searchPlaceholder="Search repositories…"
+          options={repos.map((value) => ({
+            value,
+            label: value === "." ? `${chosen?.workspace.rootName ?? "."} (root)` : value,
+          }))}
+        />
         <button
           type="button"
           aria-label="Rescan repositories"
