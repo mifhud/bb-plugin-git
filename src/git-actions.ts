@@ -119,12 +119,26 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
     case "revert": {
       const file = requireFile(input);
       const rel = resolveRepoFile(targetDir, file);
+      const abs = path.join(targetDir, rel);
+      const isDir = (await fs.promises.stat(abs).catch(() => null))?.isDirectory() ?? false;
+      if (isDir) {
+        // A folder: restore working-tree changes to tracked files inside it,
+        // then clear untracked entries. `git restore` errors when the folder
+        // holds only untracked files (the pathspec matches nothing tracked),
+        // so that single case is tolerated and deferred to `git clean`; this
+        // mirrors `revert_all`'s `restore .` + `clean -fd`. Staged changes are
+        // left staged — unstage them with the unstage action.
+        const restored = await runGit(["restore", "--", rel], cwd);
+        if (!gitOk(restored) && !/did not match/.test(restored.stderr)) {
+          throw new Error(restored.stderr.trim() || `git exited with code ${restored.exitCode}`);
+        }
+        await expectOk(["clean", "-fd", "--", rel], cwd);
+        return;
+      }
+      // A single file: `git restore` only reaches tracked files, so an
+      // untracked file is removed directly instead.
       const probe = await runGit(["status", "--porcelain", "--", rel], cwd);
       if (gitOk(probe) && probe.stdout.startsWith("??")) {
-        // Never tracked: restore cannot help, the untracked file is removed.
-        const abs = path.join(targetDir, rel);
-        const stat = await fs.promises.stat(abs).catch(() => null);
-        if (stat?.isDirectory() === true) throw new Error("Refusing to discard a folder.");
         await fs.promises.rm(abs, { force: true });
         return;
       }

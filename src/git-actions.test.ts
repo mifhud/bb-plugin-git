@@ -144,3 +144,69 @@ describe("cherry_pick", () => {
   });
 });
 
+describe("revert", () => {
+  it("removes an entire untracked folder instead of refusing it", async () => {
+    const dir = makeRepo(0);
+    try {
+      fs.mkdirSync(path.join(dir, "folder"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "folder", "new1.txt"), "a\n");
+      fs.writeFileSync(path.join(dir, "folder", "new2.txt"), "b\n");
+
+      const result = await runAction(dir, { action: "revert", file: "folder" });
+
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.existsSync(path.join(dir, "folder", "new1.txt")), false);
+      assert.equal(fs.existsSync(path.join(dir, "folder", "new2.txt")), false);
+      assert.equal(git(dir, ["status", "--porcelain", "--", "folder"]), "");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reverts tracked changes and clears untracked files in a mixed folder", async () => {
+    const dir = makeRepo(1);
+    try {
+      fs.mkdirSync(path.join(dir, "folder"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "folder", "old.txt"), "tracked\n");
+      git(dir, ["add", "folder/old.txt"]);
+      git(dir, ["commit", "-m", "track folder"]);
+      fs.writeFileSync(path.join(dir, "folder", "old.txt"), "changed\n");
+      fs.writeFileSync(path.join(dir, "folder", "new.txt"), "untracked\n");
+
+      const result = await runAction(dir, { action: "revert", file: "folder" });
+
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.readFileSync(path.join(dir, "folder", "old.txt"), "utf8"), "tracked\n");
+      assert.equal(fs.existsSync(path.join(dir, "folder", "new.txt")), false);
+      assert.equal(git(dir, ["status", "--porcelain", "--", "folder"]), "");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes a single untracked file", async () => {
+    const dir = makeRepo(0);
+    try {
+      fs.writeFileSync(path.join(dir, "solo.txt"), "x\n");
+      const result = await runAction(dir, { action: "revert", file: "solo.txt" });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.existsSync(path.join(dir, "solo.txt")), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reverts a single tracked-modified file", async () => {
+    const dir = makeRepo(1);
+    try {
+      const file = path.join(dir, "file.txt");
+      fs.writeFileSync(file, "changed\n");
+      const result = await runAction(dir, { action: "revert", file: "file.txt" });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.readFileSync(file, "utf8"), "line 0\n");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
