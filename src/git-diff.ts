@@ -51,7 +51,7 @@ export async function fetchWorkingFileDiff(
   requestedStatus?: string,
   fullContext: boolean = false,
 ): Promise<FileDiffData> {
-  const cleanFile = file.replace(/^[./\\]+/, "").replace(/\\/g, "/");
+  const cleanFile = file.replace(/^\.\//, "").replace(/\\/g, "/");
   const fullPath = path.join(targetDir, cleanFile);
   let status = requestedStatus !== undefined && requestedStatus.trim() !== ""
     ? requestedStatus.trim()

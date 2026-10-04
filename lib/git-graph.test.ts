@@ -118,3 +118,37 @@ test("buildGitTree puts folders before files", () => {
   assert.equal(tree[0].name, "alpha");
   assert.equal(tree[1].name, "zeta.txt");
 });
+
+test("buildGitTree preserves leading dots in dotfile folder names", () => {
+  const tree = buildGitTree([
+    { file: ".omp/config.txt", status: "??", staged: false },
+    { file: ".claude/settings.json", status: "??", staged: false },
+    { file: "src/app.ts", status: " M", staged: false },
+  ]);
+
+  const omp = tree.find((n) => n.name === ".omp");
+  assert.ok(omp);
+  assert.equal(omp.type, "folder");
+  assert.equal(omp.path, ".omp");
+  assert.equal(omp.changeCount, 1);
+
+  const claude = tree.find((n) => n.name === ".claude");
+  assert.ok(claude);
+  assert.equal(claude.type, "folder");
+  assert.equal(claude.path, ".claude");
+  assert.equal(claude.changeCount, 1);
+
+  const src = tree.find((n) => n.name === "src");
+  assert.ok(src);
+  assert.equal(src.changeCount, 1);
+});
+
+test("buildGitTree preserves leading dots in untracked dotfile files", () => {
+  const tree = buildGitTree([
+    { file: ".gitignore", status: "??", staged: false },
+  ]);
+  assert.equal(tree.length, 1);
+  assert.equal(tree[0].name, ".gitignore");
+  assert.equal(tree[0].path, ".gitignore");
+  assert.equal(tree[0].changeCount, 1);
+});

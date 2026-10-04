@@ -29,7 +29,7 @@ export function buildGitTree<T extends { file: string }>(items: T[]): GitTreeNod
   };
 
   for (const item of items) {
-    const cleanPath = item.file.replace(/^[./]+/, "");
+    const cleanPath = item.file.replace(/^\.\//, "");
     const isExplicitDir = cleanPath.endsWith("/");
     const parts = cleanPath.replace(/\/$/, "").split("/").filter(Boolean);
 
