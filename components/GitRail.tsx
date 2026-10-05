@@ -203,16 +203,27 @@ export function GitRail() {
   }, [rpc, railOpen, rootId]);
 
   /* -------------------------------- status reads --------------------- */
-  const readStatus = useCallback(async (): Promise<void> => {
-    if (rootId === null) return;
-    try {
-      const result = await rpc.call("status", { rootId, repo, sync: true });
-      setStatus(result);
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [rpc, rootId, repo]);
+  const readStatus = useCallback(
+    async (sync: boolean = true): Promise<void> => {
+      if (rootId === null) return;
+      try {
+        const result = await rpc.call("status", { rootId, repo, sync });
+        setStatus(result);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    },
+    [rpc, rootId, repo],
+  );
+
+  /* Errors persist for at least a minute so the user can read git's
+   * message — the 5s poll no longer wipes them, and a successful action
+   * still dismisses them immediately. */
+  useEffect(() => {
+    if (error === null) return;
+    const timer = window.setTimeout(() => setError(null), 60_000);
+    return () => window.clearTimeout(timer);
+  }, [error]);
 
   useEffect(() => {
     if (!railOpen || rootId === null) return;
@@ -251,7 +262,7 @@ export function GitRail() {
         const result = await rpc.call("act", { rootId, repo, ...input });
         if (result.ok) {
           setError(null);
-          await readStatus();
+          await readStatus(false);
           setHistoryToken((token) => token + 1);
           setStashToken((token) => token + 1);
           return true;
