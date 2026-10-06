@@ -253,8 +253,12 @@ function UnifiedBody({ lines, truncated, renderCap }: { lines: DiffLine[]; trunc
               <span className="w-9 shrink-0 select-none px-1 text-right text-[9px] text-muted-foreground" style={style}>
                 {line.newLineNumber ?? ""}
               </span>
-              <span className={`whitespace-pre overflow-hidden px-2 ${toneClass}`}>
+              {/* The +/- marker is its own non-selectable column: dragging a
+                  selection across lines must copy code, never the sign. */}
+              <span className={`ml-2 w-[1ch] shrink-0 select-none ${toneClass}`} style={style}>
                 {line.type === "add" ? "+" : line.type === "del" ? "−" : " "}
+              </span>
+              <span className={`whitespace-pre overflow-hidden pr-2 ${toneClass}`} style={style}>
                 {line.text}
               </span>
             </div>
@@ -355,8 +359,12 @@ function SplitCell({
       >
         {side.lineNumber}
       </span>
-      <span className={`whitespace-pre overflow-hidden px-1.5 ${toneClass}`}>
+      {/* Marker in its own non-selectable column, so a drag-selection across
+          split rows copies code without the +/- sign. */}
+      <span className={`ml-1.5 w-[1ch] shrink-0 select-none ${toneClass}`} style={style}>
         {side.type === "add" ? "+" : side.type === "del" ? "−" : " "}
+      </span>
+      <span className={`whitespace-pre overflow-hidden pr-1.5 ${toneClass}`} style={style}>
         {side.text}
       </span>
     </span>
