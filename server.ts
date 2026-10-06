@@ -35,6 +35,19 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       description: "Re-read git status every 5 seconds while the panel is open.",
       default: true,
     },
+    diffViewMode: {
+      type: "select",
+      label: "Default diff view",
+      description: "How file diffs are laid out. You can still switch views per-diff in the diff toolbar.",
+      options: ["unified", "split"],
+      default: "unified",
+    },
+    fullContext: {
+      type: "boolean",
+      label: "Show full file context in diffs",
+      description: "Show the entire file in diffs instead of only the changed hunks. You can still toggle this per-diff in the diff toolbar.",
+      default: false,
+    },
   });
 
   /**

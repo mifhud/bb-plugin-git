@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { parseUnifiedDiff, type DiffLine, type SplitDiffRow } from "@/lib/diff-parser";
@@ -47,13 +47,22 @@ export function DiffView({
   onBack?: () => void;
 }) {
   const rpc = useRpc<typeof rpcContract>();
+  const { values: settingsValues } = useSettings();
   const [diff, setDiff] = useState<string>("");
   const [meta, setMeta] = useState<{ additions: number; deletions: number; status?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [split, setSplit] = useState(false);
+  const [split, setSplit] = useState(() => settingsValues?.diffViewMode === "split");
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
-  const [fullContext, setFullContext] = useState(false);
+  const [fullContext, setFullContext] = useState(() => settingsValues?.fullContext === true);
+  // Fold the saved defaults into local state once settings are loaded. The
+  // dependency keys are primitives, so the toolbar toggles below are only
+  // overridden when the settings themselves change (e.g. on plugin reload),
+  // never on a plain re-render.
+  useEffect(() => {
+    setSplit(settingsValues?.diffViewMode === "split");
+    setFullContext(settingsValues?.fullContext === true);
+  }, [settingsValues?.diffViewMode, settingsValues?.fullContext]);
   // The BB host can hide scrollbars via ::-webkit-scrollbar { display: none }
   // or scrollbar-width: none. Inject !important CSS to force them visible.
   useEffect(() => {
