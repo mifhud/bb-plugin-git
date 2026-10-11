@@ -3,6 +3,7 @@ import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { parseUnifiedDiff, type DiffLine, type SplitDiffRow } from "@/lib/diff-parser";
+import { DEFAULT_SPLIT_RATIO, getSplitRatio, setSplitRatio, useSplitRatio } from "@/lib/split-ratio";
 import { cn } from "@/lib/utils";
 import { fileDiffSchema, type FileDiffData, type rpcContract } from "../contract";
 
@@ -286,13 +287,16 @@ function SplitBody({ rows, truncated, renderCap }: { rows: SplitDiffRow[]; trunc
   const shown = truncated ? rows.slice(0, renderCap) : rows;
   const leftPane = useRef<HTMLDivElement>(null);
   const rightPane = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const ratio = useSplitRatio();
   return (
-    <div className="min-h-0 flex-1 flex">
+    <div ref={body} className="relative min-h-0 flex-1 flex">
       <div
         ref={leftPane}
         data-git-scroll
         onScroll={() => syncVerticalScroll(leftPane.current, rightPane.current)}
-        className="min-h-0 min-w-0 flex-1 h-full overflow-y-scroll overflow-x-auto border-r border-border/40"
+        style={{ flexBasis: `${ratio * 100}%` }}
+        className="min-h-0 min-w-0 shrink grow-0 h-full overflow-y-scroll overflow-x-auto border-r border-border/40"
       >
         <div className="min-w-max font-mono text-[11px] leading-[1.45]">
           {shown.map((row, index) => {
@@ -336,7 +340,63 @@ function SplitBody({ rows, truncated, renderCap }: { rows: SplitDiffRow[]; trunc
           ) : null}
         </div>
       </div>
+      <SplitResizeHandle body={body} />
     </div>
+  );
+}
+
+/** Step applied per arrow-key press on the split divider. */
+const KEYBOARD_RATIO_STEP = 0.05;
+
+/**
+ * The grab strip centred on the split view's pane boundary. Positioned by
+ * percentage against the body, so it stays on the divider as the ratio
+ * changes during drag.
+ */
+function SplitResizeHandle({ body }: { body: { current: HTMLDivElement | null } }) {
+  const ratio = useSplitRatio();
+  const dragRef = useRef<{ pointerId: number } | null>(null);
+  const endDrag = (pointerId: number) => {
+    if (dragRef.current?.pointerId !== pointerId) return;
+    dragRef.current = null;
+    setSplitRatio(getSplitRatio(), { persist: true });
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize split diff panes"
+      tabIndex={0}
+      // Wider than the 1px border so it stays hittable, and centred on it.
+      className="absolute inset-y-0 z-10 w-2 cursor-col-resize touch-none select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      style={{ left: `calc(${ratio * 100}% - 4px)` }}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        dragRef.current = { pointerId: event.pointerId };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }}
+      onPointerMove={(event) => {
+        if (dragRef.current?.pointerId !== event.pointerId) return;
+        const rect = body.current?.getBoundingClientRect();
+        if (!rect || rect.width === 0) return;
+        setSplitRatio((event.clientX - rect.left) / rect.width, { persist: false });
+      }}
+      onPointerUp={(event) => endDrag(event.pointerId)}
+      onPointerCancel={(event) => endDrag(event.pointerId)}
+      onDoubleClick={() => setSplitRatio(DEFAULT_SPLIT_RATIO, { persist: true })}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          setSplitRatio(getSplitRatio() - KEYBOARD_RATIO_STEP, { persist: true });
+          event.preventDefault();
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          setSplitRatio(getSplitRatio() + KEYBOARD_RATIO_STEP, { persist: true });
+          event.preventDefault();
+        }
+      }}
+    />
   );
 }
 
