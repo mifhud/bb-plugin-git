@@ -209,6 +209,8 @@ export function SearchableSelect({
               filtered.map((option, index) => {
                 const isActive = index === activeIndex;
                 const isSelected = option.value === value;
+                // Long labels (project · path) truncate; the native tooltip
+                // keeps the full text readable on hover.
                 return (
                   <button
                     key={option.value}
@@ -216,6 +218,7 @@ export function SearchableSelect({
                     data-index={index}
                     role="option"
                     aria-selected={isSelected}
+                    title={option.label}
                     onClick={() => selectOption(option)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={cn(
