@@ -101,7 +101,7 @@ export function BranchToolbar({
         {open ? (
           <div
             role="menu"
-            className="absolute left-0 top-full z-50 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-border bg-popover py-1 text-xs text-popover-foreground shadow-lg"
+            className="absolute left-0 top-full z-50 mt-1 max-h-64 w-auto min-w-48 max-w-[80vw] overflow-x-auto overflow-y-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
           >
             {branches.length > 0 ? (
               <>
@@ -113,10 +113,11 @@ export function BranchToolbar({
                     key={name}
                     type="button"
                     role="menuitem"
+                    title={name}
                     onClick={() => pick(name)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none hover:bg-state-hover"
                   >
-                    <span className="truncate">{name}</span>
+                    <span className="whitespace-nowrap">{name}</span>
                     {name === branch ? <Icon name="Check" className="size-3 shrink-0" /> : null}
                   </button>
                 ))}
@@ -132,10 +133,11 @@ export function BranchToolbar({
                     key={name}
                     type="button"
                     role="menuitem"
+                    title={name}
                     onClick={() => pick(name)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition-none hover:bg-state-hover"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none hover:bg-state-hover"
                   >
-                    <span className="truncate">{name}</span>
+                    <span className="whitespace-nowrap">{name}</span>
                     {name === branch ? <Icon name="Check" className="size-3 shrink-0" /> : null}
                   </button>
                 ))}
@@ -149,9 +151,9 @@ export function BranchToolbar({
                 setOpen(false);
                 onCreateBranch();
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left italic text-foreground transition-none hover:bg-state-hover"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[10px] text-left italic text-foreground transition-none hover:bg-state-hover"
             >
-              <Icon name="Plus" className="size-3" />
+              <Icon name="Plus" className="size-3 shrink-0" />
               <span>New branch…</span>
             </button>
           </div>
