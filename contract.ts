@@ -187,11 +187,22 @@ export const commitDiffResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(false), error: z.string() }),
 ]);
 export type CommitDiffResult = z.infer<typeof commitDiffResultSchema>;
+/**
+ * File history result — commits that touched a specific file.
+ */
+export const fileHistorySchema = z.object({
+  /** Commits touching the file, newest first. */
+  commits: z.array(gitCommitSchema),
+  /** Whether more commits exist beyond the loaded page. */
+  hasMore: z.boolean(),
+  /** Total commits touching the file (estimated). */
+  total: z.number(),
+});
+export type FileHistory = z.infer<typeof fileHistorySchema>;
 
 /* ------------------------------------------------------------------ */
 /* RPC contract                                                        */
 /* ------------------------------------------------------------------ */
-
 export const rpcContract = defineRpcContract({
   /** Project sources and thread workspaces the Git panel can pin. */
   listRootChoices: {
@@ -304,6 +315,18 @@ export const rpcContract = defineRpcContract({
       fullContext: z.boolean().optional(),
     }).strict(),
     output: commitDiffResultSchema,
+  },
+  /** Commits touching a specific file, newest first. Mimics VS Code GitLens file history. */
+  fileHistory: {
+    input: z.object({
+      rootId: z.string().min(1),
+      repo: z.string().max(4096),
+      /** Repo-relative path of the file to show history for. */
+      file: z.string().max(4096),
+      limit: z.number().int().min(1).max(200),
+      skip: z.number().int().min(0),
+    }).strict(),
+    output: fileHistorySchema,
   },
   /** Copy a short string (commit hash, stash ref) to the system clipboard.
    *  Done server-side — navigator.clipboard is blocked under WSL, so this

@@ -3,7 +3,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { rpcContract } from "./contract";
 import { runAction } from "./src/git-actions";
 import { fetchWorkingFileDiff } from "./src/git-diff";
-import { fetchFileDiff, fetchGitCommits } from "./src/git-log";
+import { fetchFileDiff, fetchFileHistory, fetchGitCommits } from "./src/git-log";
 import { discoveredRepos, rescanRepos, startRepoScan } from "./src/git-repos";
 import { readStatus } from "./src/git-status";
 import { fetchStashFileDiff, fetchStashFiles, readStashList } from "./src/git-stash";
@@ -194,6 +194,11 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
           error: cause instanceof Error ? cause.message : String(cause),
         };
       }
+    },
+    fileHistory: async (input) => {
+      const rootPath = await requireLocalRoot(input.rootId);
+      const targetDir = resolveRepoDir(rootPath, input.repo);
+      return fetchFileHistory(targetDir, input.file, input.limit, input.skip);
     },
     copyTextToClipboard: ({ text }) => copyTextToClipboard(text),
     clientLog: ({ message }) => {

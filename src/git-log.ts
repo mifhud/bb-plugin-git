@@ -181,5 +181,47 @@ export async function fetchFileDiff(
     return "";
   }
 }
+/**
+ * File history: commits touching a specific file, newest first.
+ * Mimics VS Code GitLens file history panel.
+ */
+export async function fetchFileHistory(
+  targetDir: string,
+  file: string,
+  limit: number = 50,
+  skip: number = 0,
+): Promise<{ commits: GitCommit[]; hasMore: boolean; total: number }> {
+  // Count total commits for this file
+  let total = 0;
+  const countResult = await runGit(
+    ["rev-list", "--count", "--all", "--", file],
+    { cwd: targetDir, timeout: 10_000 },
+  );
+  if (gitOk(countResult)) total = parseInt(countResult.stdout.trim(), 10) || 0;
+
+  if (total === 0) return { commits: [], hasMore: false, total: 0 };
+
+  // Get the commits with numstat for this specific file
+  const result = await runGit(
+    [
+      "log",
+      `-n${limit}`,
+      `--skip=${skip}`,
+      "--numstat",
+      "--date-order",
+      "--pretty=format:COMMIT_SPLIT|~|%H|~|%h|~|%an|~|%ad|~|%s|~|%D|~|%p",
+      "--date=format:%b %d, %Y, %I:%M %p",
+      "--all",
+      "--",
+      file,
+    ],
+    { cwd: targetDir, timeout: 15_000 },
+  );
+  if (!gitOk(result)) return { commits: [], hasMore: false, total };
+
+  const commits = parseGitLogOutput(result.stdout);
+  const hasMore = total > 0 ? skip + commits.length < total : commits.length === limit;
+  return { commits, hasMore, total };
+}
 
 export type { GitCommitFile };

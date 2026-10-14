@@ -10,6 +10,7 @@ import { ChangesList, readStoredViewMode, writeStoredViewMode, type ViewMode } f
 import { CommitBox } from "@/components/CommitBox";
 import { ConfirmDialog, PromptDialog } from "@/components/GitDialogs";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
+import { FileHistoryPanel } from "@/components/FileHistoryPanel";
 import { HistoryView } from "@/components/HistoryView";
 import { StashList } from "@/components/StashList";
 import { RailResizeHandle } from "@/components/RailResizeHandle";
@@ -77,7 +78,7 @@ export function GitRail() {
   const [manualTick, setManualTick] = useState(0);
 
   // Tab / detail / drafts.
-  const [tab, setTab] = useState<"changes" | "graph" | "stash">("changes");
+  const [tab, setTab] = useState<"changes" | "graph" | "stash" | "history">("changes");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   const [message, setMessage] = useState("");
   const [diffFile, setDiffFile] = useState<GitChange | null>(null);
@@ -377,6 +378,19 @@ export function GitRail() {
         />
       );
     }
+    if (tab === "history") {
+      // Remount on a root or repo switch: the previous file path and its
+      // commits belong to the old repository.
+      return (
+        <FileHistoryPanel
+          key={`${rootId}:${repo}`}
+          rootId={rootId}
+          repo={repo}
+          viewMode={viewMode}
+          onOpenDiff={openDiff}
+        />
+      );
+    }
     if (diffFile !== null) {
       return (
         <DiffView
@@ -534,7 +548,7 @@ export function GitRail() {
 
       {isRepo ? (
         <div className="flex shrink-0 items-center border-b border-sidebar-border px-1.5 py-1">
-          {(["changes", "graph", "stash"] as const).map((name) => (
+          {(["changes", "graph", "stash", "history"] as const).map((name) => (
             <button
               key={name}
               type="button"
