@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,15 @@ export function FileHistoryPanel({
   rootId,
   repo,
   viewMode,
+  targetPath,
   onOpenDiff,
 }: {
   rootId: string;
   repo: string;
   viewMode: ViewMode;
+  /** A file path injected by the graph tab's "File History" jump. Loads it on
+   *  mount; null leaves the panel on its empty placeholder state. */
+  targetPath?: string | null;
   onOpenDiff?: (target: DiffTarget) => boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
@@ -41,38 +45,58 @@ export function FileHistoryPanel({
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
 
   const loadHistory = useCallback(
-    async (skip: number): Promise<void> => {
-      if (filePath.trim() === "") return;
+    async (skip: number, path: string): Promise<void> => {
+      const trimmed = path.trim();
+      if (trimmed === "") return;
       const result = await rpc.call("fileHistory", {
         rootId,
         repo,
-        file: filePath.trim(),
+        file: trimmed,
         limit: PAGE_SIZE,
         skip,
       });
       setCommits((prev) => (skip === 0 ? result.commits : [...prev, ...result.commits]));
       setHasMore(result.hasMore);
     },
-    [rpc, rootId, repo, filePath],
+    [rpc, rootId, repo],
+  );
+
+  /** Reset the list state and load one path: the manual refresh and the graph
+   *  tab's "File History" jump (which arrives as `targetPath`) share this. */
+  const resetAndLoad = useCallback(
+    (path: string): void => {
+      const trimmed = path.trim();
+      if (trimmed === "") return;
+      setFilePath(trimmed);
+      setLoading(true);
+      setError(null);
+      setCommits([]);
+      setExpanded(new Set());
+      setDiffTarget(null);
+      void loadHistory(0, trimmed)
+        .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+        .finally(() => setLoading(false));
+    },
+    [loadHistory],
   );
 
   const refresh = (): void => {
-    if (filePath.trim() === "") return;
-    setLoading(true);
-    setError(null);
-    setCommits([]);
-    setExpanded(new Set());
-    setDiffTarget(null);
-    void loadHistory(0)
-      .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
-      .finally(() => setLoading(false));
+    resetAndLoad(filePath);
   };
 
   const loadMore = (): void => {
-    void loadHistory(commits.length).catch((cause) =>
+    void loadHistory(commits.length, filePath).catch((cause) =>
       setError(cause instanceof Error ? cause.message : String(cause)),
     );
   };
+
+  /* A path injected from the graph tab's right-click "File History" jumps the
+   * History tab to that file. The pane remounts on each visit to the History
+   * tab, so this fires fresh whenever the tab opens with a pending path. */
+  useEffect(() => {
+    if (targetPath == null) return;
+    resetAndLoad(targetPath);
+  }, [targetPath, resetAndLoad]);
 
   const toggleExpand = (hash: string): void => {
     setExpanded((prev) => {

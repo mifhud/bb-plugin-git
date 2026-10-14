@@ -45,6 +45,7 @@ export function HistoryView({
   viewMode,
   dirty,
   onOpenDiff,
+  onFileHistory,
 }: {
   rootId: string;
   repo: string;
@@ -61,6 +62,8 @@ export function HistoryView({
   dirty: boolean;
   /** Open a commit file's diff as a side-panel tab; false keeps the in-rail view. */
   onOpenDiff?: (target: DiffTarget) => boolean;
+  /** Jump the rail's History tab to a file's history for the graph's right-click menu. */
+  onFileHistory?: (file: string) => void;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -529,6 +532,16 @@ export function HistoryView({
                                 if (onOpenDiff?.(target) === true) return;
                                 setDiffTarget(target);
                               }}
+                              fileContextMenu={
+                                onFileHistory === undefined
+                                  ? undefined
+                                  : (file) => [
+                                      {
+                                        label: "File History",
+                                        onSelect: () => onFileHistory(file),
+                                      },
+                                    ]
+                              }
                             />
                           </div>
                         )}

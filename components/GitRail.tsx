@@ -85,6 +85,7 @@ export function GitRail() {
   const [diffStaged, setDiffStaged] = useState(false);
   const [historyToken, setHistoryToken] = useState(0);
   const [stashToken, setStashToken] = useState(0);
+  const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
 
   // Dialogs.
   const [confirm, setConfirm] = useState<{
@@ -298,6 +299,14 @@ export function GitRail() {
     [threadId, appNavigate, selectedId, repo],
   );
 
+  const openFileHistory = useCallback(
+    (file: string): void => {
+      setFileHistoryPath(file);
+      setTab("history");
+    },
+    [],
+  );
+
   /** Discard flows ask first (unless the setting says never). */
   const requestDiscard = (message: string, file?: string): void => {
     const execute = (): Promise<boolean> => runAction({ action: "revert", ...(file !== undefined ? { file } : {}) });
@@ -362,6 +371,7 @@ export function GitRail() {
           viewMode={viewMode}
           dirty={dirty}
           onOpenDiff={openDiff}
+          onFileHistory={openFileHistory}
         />
       );
     }
@@ -388,6 +398,7 @@ export function GitRail() {
           repo={repo}
           viewMode={viewMode}
           onOpenDiff={openDiff}
+          targetPath={fileHistoryPath}
         />
       );
     }
@@ -432,6 +443,7 @@ export function GitRail() {
           onDiscardAll={() =>
             requestDiscard("Discard ALL unstaged changes? This cannot be undone.")
           }
+          onFileHistory={openFileHistory}
         />
       </>
     );
@@ -556,6 +568,7 @@ export function GitRail() {
               onClick={() => {
                 setTab(name);
                 setDiffFile(null);
+                setFileHistoryPath(null);
               }}
               className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors ${
                 tab === name

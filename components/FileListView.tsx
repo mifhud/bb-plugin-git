@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
 import { Icon } from "@/components/ui/icon";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
 import type { ViewMode } from "@/components/ChangesList";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 /** Minimal shape any file row needs: a path and optional line counts. */
 export interface FileItem {
@@ -11,14 +18,55 @@ export interface FileItem {
   deletions?: number;
 }
 
+/** One right-click context-menu entry offered on a file row. */
+export interface FileContextMenuEntry {
+  label: string;
+  onSelect: () => void;
+  destructive?: boolean;
+}
+
+/** Wraps a single file row in a right-click menu when `entries` are supplied;
+ *  otherwise renders the row untouched. Shared by the flat and tree views so the
+ *  menu behaves identically wherever a file row appears. */
+function FileRowContextMenu({
+  entries,
+  children,
+}: {
+  entries: FileContextMenuEntry[] | undefined;
+  children: React.ReactNode;
+}) {
+  if (entries === undefined || entries.length === 0) return <>{children}</>;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        {entries.map((entry, index) => (
+          <Fragment key={entry.label}>
+            {index > 0 && <ContextMenuSeparator />}
+            <ContextMenuItem
+              onSelect={entry.onSelect}
+              className={entry.destructive ? "text-destructive focus:text-destructive" : undefined}
+            >
+              {entry.label}
+            </ContextMenuItem>
+          </Fragment>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 export function FileListView<T extends FileItem>({
   files,
   viewMode,
   onFileClick,
+  fileContextMenu,
 }: {
   files: T[];
   viewMode: ViewMode;
   onFileClick: (file: string) => void;
+  /** Optional right-click menu for each file row; omitted rows render plainly. */
+  fileContextMenu?: (file: string) => FileContextMenuEntry[];
 }) {
   const handleFileKeyDown = (event: React.KeyboardEvent, file: string) => {
     if (event.key === "Enter") {
@@ -31,25 +79,26 @@ export function FileListView<T extends FileItem>({
     return (
       <>
         {files.map((item) => (
-          <div
-            key={item.file}
-            role="button"
-            tabIndex={0}
-            className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
-            onClick={() => onFileClick(item.file)}
-            onKeyDown={(event) => handleFileKeyDown(event, item.file)}
-            title={item.file}
-          >
-            <span className="min-w-0 flex-1 truncate">{item.file}</span>
-            <span className="shrink-0 font-mono text-[10px] tabular-nums">
-              <span className="text-success">+{item.additions ?? 0}</span>{" "}
-              <span className="text-destructive">−{item.deletions ?? 0}</span>
-            </span>
-          </div>
+          <FileRowContextMenu key={item.file} entries={fileContextMenu?.(item.file)}>
+            <div
+              role="button"
+              tabIndex={0}
+              className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+              onClick={() => onFileClick(item.file)}
+              onKeyDown={(event) => handleFileKeyDown(event, item.file)}
+              title={item.file}
+            >
+              <span className="min-w-0 flex-1 truncate">{item.file}</span>
+              <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                <span className="text-success">+{item.additions ?? 0}</span>{" "}
+                <span className="text-destructive">−{item.deletions ?? 0}</span>
+              </span>
+            </div>
+          </FileRowContextMenu>
         ))}
       </>
     );
-  }
+}
 
   /* ---- Tree view ---- */
   const tree = useMemo(() => buildGitTree(files), [files]);
@@ -136,23 +185,24 @@ export function FileListView<T extends FileItem>({
       const data = node.data;
       const fileName = data.file.split("/").pop() ?? data.file;
       return (
-        <div
-          key={data.file}
-          role="button"
-          tabIndex={0}
-          className="flex cursor-pointer items-center gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
-          style={indent}
-          onClick={() => onFileClick(data.file)}
-          onKeyDown={(event) => handleFileKeyDown(event, data.file)}
-          title={data.file}
-        >
-          <FileTypeIcon name={fileName} className="size-3 shrink-0" />
-          <span className="min-w-0 truncate">{data.file}</span>
-          <span className="shrink-0 font-mono text-[10px] tabular-nums">
-            <span className="text-success">+{data.additions ?? 0}</span>{" "}
-            <span className="text-destructive">−{data.deletions ?? 0}</span>
-          </span>
-        </div>
+        <FileRowContextMenu key={data.file} entries={fileContextMenu?.(data.file)}>
+          <div
+            role="button"
+            tabIndex={0}
+            className="flex cursor-pointer items-center gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
+            style={indent}
+            onClick={() => onFileClick(data.file)}
+            onKeyDown={(event) => handleFileKeyDown(event, data.file)}
+            title={data.file}
+          >
+            <FileTypeIcon name={fileName} className="size-3 shrink-0" />
+            <span className="min-w-0 truncate">{data.file}</span>
+            <span className="shrink-0 font-mono text-[10px] tabular-nums">
+              <span className="text-success">+{data.additions ?? 0}</span>{" "}
+              <span className="text-destructive">−{data.deletions ?? 0}</span>
+            </span>
+          </div>
+        </FileRowContextMenu>
       );
     });
 

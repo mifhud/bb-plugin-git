@@ -57,6 +57,7 @@ interface ChangesListProps {
   onStageAll: () => void;
   onUnstageAll: () => void;
   onDiscardAll: () => void;
+  onFileHistory?: (file: string) => void;
 }
 
 export function ChangesList(props: ChangesListProps) {
@@ -114,7 +115,7 @@ export function ChangesList(props: ChangesListProps) {
         />
         {stagedOpen
           ? viewMode === "tree"
-            ? <TreeRows changes={staged} isStaged isBusy={isBusy} {...rowActions} onOpenDiff={props.onOpenDiff} />
+            ? <TreeRows changes={staged} isStaged isBusy={isBusy} {...rowActions} onOpenDiff={props.onOpenDiff} onFileHistory={props.onFileHistory} />
             : staged.map((change) => (
                 <FileRow
                   key={`${change.file}:staged`}
@@ -125,6 +126,7 @@ export function ChangesList(props: ChangesListProps) {
                   onStage={props.onStage}
                   onUnstage={props.onUnstage}
                   onDiscard={props.onDiscard}
+                  onFileHistory={props.onFileHistory}
                 />
               ))
           : null}
@@ -168,7 +170,7 @@ export function ChangesList(props: ChangesListProps) {
         />
         {unstagedOpen
           ? viewMode === "tree"
-            ? <TreeRows changes={unstaged} isStaged={false} isBusy={isBusy} {...rowActions} onOpenDiff={props.onOpenDiff} />
+            ? <TreeRows changes={unstaged} isStaged={false} isBusy={isBusy} {...rowActions} onOpenDiff={props.onOpenDiff} onFileHistory={props.onFileHistory} />
             : unstaged.map((change) => (
                 <FileRow
                   key={`${change.file}:unstaged`}
@@ -179,6 +181,7 @@ export function ChangesList(props: ChangesListProps) {
                   onStage={props.onStage}
                   onUnstage={props.onUnstage}
                   onDiscard={props.onDiscard}
+                  onFileHistory={props.onFileHistory}
                 />
               ))
           : null}
@@ -313,6 +316,7 @@ function RowContextMenu({
   onStage,
   onUnstage,
   onDiscard,
+  onFileHistory,
   children,
 }: {
   target: string;
@@ -321,6 +325,7 @@ function RowContextMenu({
   onStage: (file: string) => void;
   onUnstage: (file: string) => void;
   onDiscard: (file: string) => void;
+  onFileHistory?: (file: string) => void;
   children: React.ReactNode;
 }) {
   if (disabled) return <>{children}</>;
@@ -335,7 +340,6 @@ function RowContextMenu({
             <ContextMenuItem onSelect={() => onStage(target)}>
               Stage Changes
             </ContextMenuItem>
-            <ContextMenuSeparator />
             <ContextMenuItem
               onSelect={() => onDiscard(target)}
               className="text-destructive focus:text-destructive"
@@ -348,6 +352,13 @@ function RowContextMenu({
             Unstage Changes
           </ContextMenuItem>
         )}
+        {onFileHistory !== undefined ? (
+          <>
+            <ContextMenuItem onSelect={() => onFileHistory(target)}>
+              File History
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -362,6 +373,7 @@ function FileRow({
   onStage,
   onUnstage,
   onDiscard,
+  onFileHistory,
   indent,
 }: {
   change: GitChange;
@@ -371,6 +383,7 @@ function FileRow({
   onStage: (file: string) => void;
   onUnstage: (file: string) => void;
   onDiscard: (file: string) => void;
+  onFileHistory?: (file: string) => void;
   /** Tree-mode indent; when provided, uses compact row styling instead of flat. */
   indent?: CSSProperties;
 }) {
@@ -448,6 +461,7 @@ function FileRow({
       onStage={onStage}
       onUnstage={onUnstage}
       onDiscard={onDiscard}
+      onFileHistory={onFileHistory}
     >
       {row}
     </RowContextMenu>
@@ -463,6 +477,7 @@ function TreeRows({
   onStage,
   onUnstage,
   onDiscard,
+  onFileHistory,
 }: {
   changes: GitChange[];
   isStaged: boolean;
@@ -471,6 +486,7 @@ function TreeRows({
   onStage: (file: string) => void;
   onUnstage: (file: string) => void;
   onDiscard: (file: string) => void;
+  onFileHistory?: (file: string) => void;
 }) {
   const tree = useMemo(() => buildGitTree(changes), [changes]);
 
@@ -599,6 +615,7 @@ function TreeRows({
           onStage={onStage}
           onUnstage={onUnstage}
           onDiscard={onDiscard}
+          onFileHistory={onFileHistory}
           indent={indent}
         />
       );
