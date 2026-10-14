@@ -135,7 +135,7 @@ export function FileHistoryPanel({
       <div className="flex shrink-0 items-center gap-1 border-b border-sidebar-border px-1.5 py-1">
         <Input
           aria-label="File path"
-          placeholder="src/index.ts"
+          placeholder="File path"
           value={filePath}
           onChange={(event) => setFilePath(event.target.value)}
           onKeyDown={(event) => {
