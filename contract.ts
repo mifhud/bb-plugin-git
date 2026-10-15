@@ -166,6 +166,7 @@ export const gitActionSchema = z.enum([
   "stash_pop",
   "stash_drop",
   "stash_apply",
+  "stash_apply_file",
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
 

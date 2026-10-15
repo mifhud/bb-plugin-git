@@ -210,3 +210,43 @@ describe("revert", () => {
   });
 });
 
+describe("stash_apply_file", () => {
+  it("applies a single stashed file to the working tree", async () => {
+    const dir = makeRepo(1);
+    try {
+      // Stash a new file + a modification, then apply only the new file.
+      fs.writeFileSync(path.join(dir, "stashed.txt"), "stash content\n");
+      fs.writeFileSync(path.join(dir, "file.txt"), "modified\n");
+      git(dir, ["add", "."]);
+      git(dir, ["stash", "push", "-m", "stash both"]);
+      // Confirm only the new file is applied.
+      const result = await runAction(dir, {
+        action: "stash_apply_file",
+        stash: "stash@{0}",
+        file: "stashed.txt",
+      });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.readFileSync(path.join(dir, "stashed.txt"), "utf8"), "stash content\n");
+      // The other stashed change (file.txt) should NOT have been applied.
+      assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "line 0\n");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a missing file field", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["stash", "push", "-m", "stash"]);
+      const result = await runAction(dir, {
+        action: "stash_apply_file",
+        stash: "stash@{0}",
+      });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /Missing file/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+

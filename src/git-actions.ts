@@ -246,6 +246,16 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
       await expectOk(["stash", "apply", ref], cwd);
       return;
     }
+    case "stash_apply_file": {
+      const ref = assertStashRef(requireText(input.stash, "stash"));
+      const file = requireFile(input);
+      const rel = resolveRepoFile(targetDir, file);
+      // `git checkout <stash> -- <file>` restores the stashed version of a
+      // single file into both the index and the working tree, applying just
+      // that file's change from the stash without touching the rest.
+      await expectOk(["checkout", ref, "--", rel], cwd);
+      return;
+    }
   }
 }
 

@@ -1,8 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { FileTypeIcon } from "@/components/ui/file-type-icon";
-import type { ViewMode } from "@/components/ChangesList";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -10,6 +8,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
+import type { ViewMode } from "@/components/ChangesList";
 
 /** Minimal shape any file row needs: a path and optional line counts. */
 export interface FileItem {
@@ -22,6 +22,16 @@ export interface FileItem {
 export interface FileContextMenuEntry {
   label: string;
   onSelect: () => void;
+  destructive?: boolean;
+}
+
+/** A single hover-triggered action offered on a file row (e.g. applying a
+ *  stashed file). Returns undefined for files that have no action, so the
+ *  row renders its plain (non-action) trigger. */
+export interface FileAction {
+  icon: IconName;
+  title: string;
+  onClick: () => void;
   destructive?: boolean;
 }
 
@@ -56,23 +66,65 @@ function FileRowContextMenu({
   );
 }
 
+function FileActionIcon({ action, disabled }: { action: FileAction; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      title={action.title}
+      aria-label={action.title}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        action.onClick();
+      }}
+      className={`flex size-5 items-center justify-center rounded text-xs leading-none transition-colors hover:bg-state-active disabled:opacity-40 ${
+        action.destructive
+          ? "text-destructive hover:text-destructive"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      <Icon name={action.icon} className="size-3" />
+    </button>
+  );
+}
+
 export function FileListView<T extends FileItem>({
   files,
   viewMode,
   onFileClick,
   fileContextMenu,
+  fileAction,
+  disabled,
 }: {
   files: T[];
   viewMode: ViewMode;
   onFileClick: (file: string) => void;
   /** Optional right-click menu for each file row; omitted rows render plainly. */
   fileContextMenu?: (file: string) => FileContextMenuEntry[];
+  /** Optional single hover icon per file row (e.g. stash-apply); omitted rows render plainly. */
+  fileAction?: (file: string) => FileAction | undefined;
+  /** When true, hover action buttons render disabled (panel is busy). */
+  disabled?: boolean;
 }) {
   const handleFileKeyDown = (event: React.KeyboardEvent, file: string) => {
     if (event.key === "Enter") {
       event.preventDefault();
       onFileClick(file);
     }
+  };
+
+  const renderAction = (file: string): React.ReactNode => {
+    const action = fileAction?.(file);
+    if (action === undefined) return null;
+    return (
+      <span
+        className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+        onClick={(event) => event.stopPropagation()}
+        role="none"
+      >
+        <FileActionIcon action={action} disabled={disabled ?? false} />
+      </span>
+    );
   };
 
   if (viewMode === "flat") {
@@ -83,7 +135,7 @@ export function FileListView<T extends FileItem>({
             <div
               role="button"
               tabIndex={0}
-              className="flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
+              className="group flex cursor-pointer items-center justify-between gap-2 px-2 py-0.5 text-[11px] transition-colors hover:bg-state-hover"
               onClick={() => onFileClick(item.file)}
               onKeyDown={(event) => handleFileKeyDown(event, item.file)}
               title={item.file}
@@ -93,12 +145,13 @@ export function FileListView<T extends FileItem>({
                 <span className="text-success">+{item.additions ?? 0}</span>{" "}
                 <span className="text-destructive">−{item.deletions ?? 0}</span>
               </span>
+              {renderAction(item.file)}
             </div>
           </FileRowContextMenu>
         ))}
       </>
     );
-}
+  }
 
   /* ---- Tree view ---- */
   const tree = useMemo(() => buildGitTree(files), [files]);
@@ -189,18 +242,21 @@ export function FileListView<T extends FileItem>({
           <div
             role="button"
             tabIndex={0}
-            className="flex cursor-pointer items-center gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
+            className="group flex cursor-pointer items-center justify-between gap-1 py-px pr-1 text-[11px] leading-5 text-left transition-colors hover:bg-state-hover"
             style={indent}
             onClick={() => onFileClick(data.file)}
             onKeyDown={(event) => handleFileKeyDown(event, data.file)}
             title={data.file}
           >
-            <FileTypeIcon name={fileName} className="size-3 shrink-0" />
-            <span className="min-w-0 truncate">{data.file}</span>
+            <span className="min-w-0 flex-1 truncate">
+              <FileTypeIcon name={fileName} className="size-3 shrink-0" />
+              {data.file}
+            </span>
             <span className="shrink-0 font-mono text-[10px] tabular-nums">
               <span className="text-success">+{data.additions ?? 0}</span>{" "}
               <span className="text-destructive">−{data.deletions ?? 0}</span>
             </span>
+            {renderAction(data.file)}
           </div>
         </FileRowContextMenu>
       );

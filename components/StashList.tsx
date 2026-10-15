@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
+import { FileListView, type FileAction, type FileContextMenuEntry } from "@/components/FileListView";
 import type { GitAction, GitStash, GitStashFile, rpcContract } from "../contract";
-import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
 
 /**
@@ -34,7 +34,7 @@ export function StashList({
 }: {
   rootId: string;
   repo: string;
-  runAction: (input: { action: GitAction; stash?: string; message?: string }) => Promise<boolean>;
+  runAction: (input: { action: GitAction; file?: string; stash?: string; message?: string }) => Promise<boolean>;
   actionBusy: boolean;
   /** Bumped by the rail after any mutation; the list reloads on each bump. */
   refreshToken: number;
@@ -375,11 +375,33 @@ export function StashList({
                         <FileListView
                           files={files}
                           viewMode={viewMode}
+                          disabled={actionBusy}
                           onFileClick={(file) => {
                             const target: DiffTarget = { kind: "stash", stash: stash.ref, file };
                             if (onOpenDiff?.(target) === true) return;
                             setDiffTarget({ stash: stash.ref, file });
                           }}
+                          fileAction={(file) => ({
+                            icon: "ArchiveRestore",
+                            title: `Apply ${file} from ${stash.ref}`,
+                            onClick: () =>
+                              void runAction({
+                                action: "stash_apply_file",
+                                stash: stash.ref,
+                                file,
+                              }),
+                          })}
+                          fileContextMenu={(file) => [
+                            {
+                              label: `Apply ${file} from stash`,
+                              onSelect: () =>
+                                void runAction({
+                                  action: "stash_apply_file",
+                                  stash: stash.ref,
+                                  file,
+                                }),
+                            },
+                          ]}
                         />
                       )}
                     </div>
