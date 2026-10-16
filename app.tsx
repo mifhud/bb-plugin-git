@@ -3,6 +3,7 @@ import { GitRail } from "@/components/GitRail";
 import { GitHeaderAction } from "@/components/GitHeaderAction";
 import { GitDiffPanel } from "@/components/GitDiffPanel";
 import { GIT_DIFF_ACTION_ID } from "@/lib/open-diff-panel";
+import { AgentPicker } from "@/components/AgentPicker";
 import { toggleRailOpen, writeStoredOpen } from "@/lib/rail-state";
 
 export default definePluginApp((app) => {
@@ -51,5 +52,13 @@ export default definePluginApp((app) => {
     id: "hide-git-panel",
     title: "Git: hide panel",
     run: () => writeStoredOpen(false),
+  });
+
+  app.slots.settingsSection({
+    id: "commit-agent",
+    title: "Commit message agent",
+    description:
+      "Which agent generates commit messages from staged changes. Pick a model to always use that one, or keep the project default.",
+    component: AgentPicker,
   });
 });

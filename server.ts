@@ -1,6 +1,16 @@
 import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { rpcContract } from "./contract";
+import {
+  buildCommitPrompt,
+  cleanAgentOutput,
+  collectStagedDiff,
+  COMMIT_SELECTION_KEY,
+  createCatalogCache,
+  DEFAULT_COMMIT_INSTRUCTION,
+  resolveCommitTarget,
+  runCommitMessageThread,
+} from "./src/git-commit-gen";
 import { runAction } from "./src/git-actions";
 import { fetchWorkingFileDiff } from "./src/git-diff";
 import { fetchFileDiff, fetchFileHistory, fetchGitCommits } from "./src/git-log";
@@ -11,13 +21,21 @@ import { gitSyncCount, refreshRemoteRefs } from "./src/git-sync";
 import { resolveRoot } from "./src/roots";
 import { listRootChoices, workspaceForThread } from "./src/workspace";
 import { copyTextToClipboard } from "./src/git-clipboard";
-
+import type { AgentSelection } from "./shared";
+/** How long to wait for an agent to generate a commit message before giving up. */
+const TIMEOUT_OPTIONS: Record<string, number> = {
+  "30 seconds": 30_000,
+  "1 minute": 60_000,
+  "2 minutes": 120_000,
+  "5 minutes": 300_000,
+};
+const DEFAULT_TIMEOUT_OPTION = "2 minutes";
 export { rpcContract } from "./contract";
 
 export default async function plugin(bb: BbPluginApi): Promise<void> {
   bb.log.info("loaded");
 
-  bb.settings.define({
+  const settings = bb.settings.define({
     openByDefault: {
       type: "boolean",
       label: "Show the Git panel when BB opens",
@@ -48,7 +66,22 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       description: "Show the entire file in diffs instead of only the changed hunks. You can still toggle this per-diff in the diff toolbar.",
       default: false,
     },
+    commitMessageInstruction: {
+      type: "string",
+      label: "Commit message instruction",
+      description:
+        "Instruction sent to the agent with the staged diff when generating a commit message. Clear it to restore the built-in instruction.",
+      default: DEFAULT_COMMIT_INSTRUCTION,
+    },
+    timeout: {
+      type: "select",
+      label: "Commit message timeout",
+      description: "How long to wait for the agent to generate a commit message.",
+      options: Object.keys(TIMEOUT_OPTIONS),
+      default: DEFAULT_TIMEOUT_OPTION,
+    },
   });
+  const catalog = createCatalogCache(bb);
 
   /**
    * Git commands run in this process, so the repository must live on this
@@ -204,6 +237,48 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
     clientLog: ({ message }) => {
       bb.log.info(`client: ${message}`);
       return { ok: true };
+    },
+    generateCommitMessage: async (input) => {
+      try {
+        const rootPath = await requireLocalRoot(input.rootId);
+        const targetDir = resolveRepoDir(rootPath, input.repo);
+        const diff = await collectStagedDiff(targetDir);
+        if (diff === "") {
+          return { ok: false as const, error: "No staged changes to generate a commit message from." };
+        }
+        const { commitMessageInstruction, timeout } = await settings.get();
+        const timeoutMs =
+          TIMEOUT_OPTIONS[timeout] ?? TIMEOUT_OPTIONS[DEFAULT_TIMEOUT_OPTION]!;
+        const selection =
+          (await bb.storage.kv.get<AgentSelection>(COMMIT_SELECTION_KEY)) ?? null;
+        const target = await resolveCommitTarget(bb, input.rootKey, selection);
+        const prompt = buildCommitPrompt(commitMessageInstruction.trim() || DEFAULT_COMMIT_INSTRUCTION, diff);
+        const output = await runCommitMessageThread(bb, target, prompt, timeoutMs);
+        const cleaned = cleanAgentOutput(output ?? "");
+        if (cleaned === "") {
+          return { ok: false as const, error: "The agent returned an empty commit message." };
+        }
+        return { ok: true as const, message: cleaned };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        bb.log.warn(`commit message generation failed: ${message}`);
+        return { ok: false as const, error: message };
+      }
+    },
+    commitAgentCatalog: async ({ refresh }) => {
+      const snapshot = await catalog.read(refresh);
+      return {
+        selection: (await bb.storage.kv.get<AgentSelection>(COMMIT_SELECTION_KEY)) ?? null,
+        ...snapshot,
+      };
+    },
+    selectCommitAgent: async ({ selection }) => {
+      if (selection === null) {
+        await bb.storage.kv.delete(COMMIT_SELECTION_KEY);
+      } else {
+        await bb.storage.kv.set(COMMIT_SELECTION_KEY, selection);
+      }
+      return { selection };
     },
   });
 

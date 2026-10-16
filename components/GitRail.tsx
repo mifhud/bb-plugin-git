@@ -76,6 +76,7 @@ export function GitRail() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [manualTick, setManualTick] = useState(0);
 
   // Tab / detail / drafts.
@@ -326,6 +327,23 @@ export function GitRail() {
     });
   };
 
+  const handleGenerateCommitMessage = (): void => {
+    if (rootId === null || selectedId === null || stagedCount === 0) return;
+    setGenerating(true);
+    void rpc
+      .call("generateCommitMessage", { rootId, repo, rootKey: selectedId })
+      .then((result) => {
+        if (result.ok) {
+          setMessage(result.message);
+          setError(null);
+        } else {
+          setError(result.error);
+        }
+      })
+      .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+      .finally(() => setGenerating(false));
+  };
+
   /* -------------------------------- layout --------------------------- */
   useLayoutEffect(() => {
     if (!railOpen || compact) {
@@ -422,6 +440,8 @@ export function GitRail() {
           stagedCount={stagedCount}
           isBusy={busy}
           isCommitting={committing}
+          generating={generating}
+          onGenerate={handleGenerateCommitMessage}
           onCommit={commitNow}
         />
         <ChangesList

@@ -205,3 +205,39 @@ export const fileHistorySchema = z.object({
   total: z.number(),
 });
 export type FileHistory = z.infer<typeof fileHistorySchema>;
+
+/* ------------------------------------------------------------------ */
+/* Commit-message generation — agent model catalogue (mirrors          */
+/* bb-plugin-rephrase, so the picker filters the same way).            */
+/* ------------------------------------------------------------------ */
+
+/** The agent a commit-message generation runs on, or null for the default. */
+export const agentSelectionSchema = z.object({
+  providerId: z.string().min(1),
+  model: z.string().min(1),
+});
+export type AgentSelection = z.infer<typeof agentSelectionSchema>;
+
+/** One selectable model row in the commit-message agent picker. */
+export const modelChoiceSchema = z.object({
+  providerId: z.string(),
+  /** Provider display name, rendered as the group heading. */
+  providerName: z.string(),
+  model: z.string(),
+  /** Row label: the catalogue's display name without its brand prefix. */
+  label: z.string(),
+  description: z.string(),
+  /**
+   * Listed only while searching. The host's picker hides these behind "More
+   * models" until a query is typed, and so does this picker.
+   */
+  extra: z.boolean(),
+});
+export type ModelChoice = z.infer<typeof modelChoiceSchema>;
+
+/** Result of generating a commit message: the message, or why there is none. */
+export const commitMessageResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), message: z.string() }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+export type CommitMessageResult = z.infer<typeof commitMessageResultSchema>;

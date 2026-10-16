@@ -2,13 +2,16 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import {
   actionResultSchema,
+  agentSelectionSchema,
   commitDiffResultSchema,
+  commitMessageResultSchema,
   commitPageSchema,
   fileDiffSchema,
   fileHistorySchema,
   gitActionSchema,
   gitStashListSchema,
   gitStatusSchema,
+  modelChoiceSchema,
   repoListSchema,
   rootChoiceSchema,
   stashFilesSchema,
@@ -157,5 +160,41 @@ export const rpcContract = defineRpcContract({
   clientLog: {
     input: z.object({ message: z.string().max(2000) }).strict(),
     output: z.object({ ok: z.boolean() }),
+  },
+  /**
+   * Generate a commit message from the staged diff for the given repo.
+   * Runs an agent in a hidden thread; the model/picker are configured in
+   * the plugin's settings (mirrors bb-plugin-rephrase).
+   */
+  generateCommitMessage: {
+    input: z
+      .object({
+        rootId: z.string().min(1),
+        repo: z.string().max(4096),
+        /** Pinned root id as seen by the panel (`source:<id>` or `thread:<id>`). */
+        rootKey: z.string().min(1),
+      })
+      .strict(),
+    output: commitMessageResultSchema,
+  },
+  /** Cached model catalogue for the commit-message agent picker. */
+  commitAgentCatalog: {
+    input: z.object({ refresh: z.boolean() }).strict(),
+    output: z.object({
+      selection: agentSelectionSchema.nullable(),
+      choices: z.array(modelChoiceSchema),
+      /** Agents that reported no catalogue, by display name. */
+      unavailable: z.array(z.string()),
+      /** Agents still being asked, by display name. */
+      pending: z.array(z.string()),
+      discovering: z.boolean(),
+    }),
+  },
+  /** Persist the picked agent for commit-message generation. */
+  selectCommitAgent: {
+    input: z
+      .object({ selection: agentSelectionSchema.nullable() })
+      .strict(),
+    output: z.object({ selection: agentSelectionSchema.nullable() }),
   },
 });
