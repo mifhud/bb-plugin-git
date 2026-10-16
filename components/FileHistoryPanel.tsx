@@ -6,7 +6,8 @@ import { Icon } from "@/components/ui/icon";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileListView } from "@/components/FileListView";
 import type { ViewMode } from "@/components/ChangesList";
-import type { GitCommit, rpcContract } from "../contract";
+import type { GitCommit } from "../shared";
+import type { rpcContract } from "../contract";
 
 /**
  * The rail's History tab: every commit that touched one file, mimicking

@@ -5,7 +5,8 @@ import { Icon } from "@/components/ui/icon";
 import { parseUnifiedDiff, type DiffLine, type SplitDiffRow } from "@/lib/diff-parser";
 import { DEFAULT_SPLIT_RATIO, getSplitRatio, setSplitRatio, useSplitRatio } from "@/lib/split-ratio";
 import { cn } from "@/lib/utils";
-import { fileDiffSchema, type FileDiffData, type rpcContract } from "../contract";
+import { fileDiffSchema, type FileDiffData } from "../shared";
+import type { rpcContract } from "../contract";
 
 /**
  * Diff viewer for one file — working tree, index, or a file inside a commit.

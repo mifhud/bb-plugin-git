@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import type { GitSyncCount } from "../contract";
+import type { GitSyncCount } from "../shared";
 import type { ViewMode } from "@/components/ChangesList";
 
 /**

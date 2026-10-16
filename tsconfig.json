@@ -25,6 +25,7 @@
     "server.ts",
     "app.tsx",
     "contract.ts",
+    "shared.ts",
     "src",
     "components",
     "lib",

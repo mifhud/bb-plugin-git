@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { GitCommit } from "../contract";
+import type { GitCommit } from "../shared";
 import { computeCherryPickState, reachableFromHead } from "./commit-actions.ts";
 
 function commit(hash: string, parents: string[], extra: Partial<GitCommit> = {}): GitCommit {

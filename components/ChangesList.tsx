@@ -10,7 +10,7 @@ import {
 import { getGitStatusInfo } from "@/lib/git-status-display";
 import { buildGitTree, type GitTreeNode } from "@/lib/git-tree";
 import type { CSSProperties } from "react";
-import type { GitChange } from "../contract";
+import type { GitChange } from "../shared";
 
 export type ViewMode = "flat" | "tree";
 

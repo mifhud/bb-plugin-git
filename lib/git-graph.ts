@@ -6,7 +6,7 @@
  * lane changes. Pure functions; the renderer draws the result.
  */
 
-import type { GitCommit } from "../contract";
+import type { GitCommit } from "../shared";
 
 export const LANE_COLORS = [
   "#38bdf8", // sky/blue

@@ -4,13 +4,13 @@
  * mirroring `git-status.ts` (same "non-repo → empty, never throw" contract).
  */
 
-import type { GitStash, GitStashFile } from "../contract";
+import type { GitStash, GitStashFile } from "../shared";
 import { parseStash } from "./git-parse.ts";
 import { gitOk, runGit } from "./shell.ts";
 import { FULL_CONTEXT } from "./git-diff.ts";
 
 export { parseStash } from "./git-parse.ts";
-export type { GitStash } from "../contract";
+export type { GitStash } from "../shared";
 
 /**
  * Lists stashes for one working tree via `git stash list`. A non-zero exit

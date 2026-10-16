@@ -12,7 +12,7 @@
  * is temporary, so it renders disabled with the reason.
  */
 
-import type { GitCommit } from "../contract";
+import type { GitCommit } from "../shared";
 
 /** Hash-prefix match: the log carries abbreviated parents against full hashes. */
 function isSameHash(h1: string | null | undefined, h2: string | null | undefined): boolean {

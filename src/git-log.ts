@@ -6,7 +6,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { CommitPage, GitCommit, GitCommitFile } from "../contract";
+import type { CommitPage, GitCommit, GitCommitFile } from "../shared";
 import { gitOk, runGit } from "./shell.ts";
 import { FULL_CONTEXT } from "./git-diff.ts";
 

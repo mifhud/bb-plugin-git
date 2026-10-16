@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { RootChoice, WorkspaceResult } from "../contract";
+import type { RootChoice, WorkspaceResult } from "../shared";
 import { registerRoot } from "./roots.ts";
 
 /**

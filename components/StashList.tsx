@@ -5,7 +5,8 @@ import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileListView, type FileAction, type FileContextMenuEntry } from "@/components/FileListView";
-import type { GitAction, GitStash, GitStashFile, rpcContract } from "../contract";
+import type { GitAction, GitStash, GitStashFile } from "../shared";
+import type { rpcContract } from "../contract";
 import { type ViewMode } from "@/components/ChangesList";
 
 /**

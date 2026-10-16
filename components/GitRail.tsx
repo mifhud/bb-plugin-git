@@ -20,7 +20,8 @@ import { acquireRailInset, syncRailInset } from "@/lib/rail-inset";
 import { usePortalScopeProps } from "@/lib/portal-scope";
 import { RAIL_EVENT, initializeRailOpen, writeStoredOpen } from "@/lib/rail-state";
 import { useRailWidthPx } from "@/lib/rail-width";
-import type { GitAction, GitChange, GitStatus, RootChoice, rpcContract } from "../contract";
+import type { GitAction, GitChange, GitStatus, RootChoice } from "../shared";
+import type { rpcContract } from "../contract";
 
 const ROOT_STORAGE_KEY = "bb-plugin-git:pinned-root";
 const STATUS_POLL_MS = 5000;

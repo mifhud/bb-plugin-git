@@ -12,7 +12,8 @@ import {
   computeGraphLinks,
 } from "@/lib/git-graph";
 import { computeCherryPickState } from "@/lib/commit-actions";
-import type { GitAction, GitCommit, rpcContract } from "../contract";
+import type { GitAction, GitCommit } from "../shared";
+import type { rpcContract } from "../contract";
 import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
 

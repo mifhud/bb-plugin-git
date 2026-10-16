@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { GitCommit } from "../contract";
+import type { GitCommit } from "../shared";
 import { computeCommitLanes, computeGraphLinks } from "./git-graph.ts";
 import { buildGitTree } from "./git-tree.ts";
 

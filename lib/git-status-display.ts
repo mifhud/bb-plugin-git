@@ -6,7 +6,7 @@
  * not another app's custom colors).
  */
 
-import type { GitChange } from "../contract";
+import type { GitChange } from "../shared";
 
 export interface GitStatusInfo {
   charStatus: string;

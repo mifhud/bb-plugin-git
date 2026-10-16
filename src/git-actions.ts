@@ -8,7 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { GitAction } from "../contract";
+import type { GitAction } from "../shared";
 import { invalidateRemoteRefs, markRemoteRefsFresh } from "./git-sync.ts";
 import { expectOk, gitOk, runGit } from "./shell.ts";
 

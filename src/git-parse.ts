@@ -5,7 +5,7 @@
  * testable under plain `node --test`.
  */
 
-import type { GitChange, GitStash } from "../contract";
+import type { GitChange, GitStash } from "../shared";
 
 /**
  * Parses `git status --porcelain=v1 -uall` output into panel changes.

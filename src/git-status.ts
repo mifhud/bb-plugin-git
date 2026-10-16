@@ -4,7 +4,7 @@
  * only spawns git and joins their answers.
  */
 
-import type { GitChange } from "../contract";
+import type { GitChange } from "../shared";
 import { parsePorcelain, parseRefs, type RefsInfo } from "./git-parse.ts";
 import { gitOk, runGit } from "./shell.ts";
 
