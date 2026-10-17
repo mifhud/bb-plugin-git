@@ -175,7 +175,7 @@ export function StashList({
           placeholder="Stash message"
           aria-label="Stash message"
           disabled={actionBusy}
-          className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-9 w-full resize-y rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="truncate text-[10px] text-muted-foreground">Stash tracked changes</span>
