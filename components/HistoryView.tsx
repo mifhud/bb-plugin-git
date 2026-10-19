@@ -152,6 +152,25 @@ export function HistoryView({
     [commits, searchTerm, isSearching],
   );
 
+  /*
+   * Client-side filtering only sees already-loaded pages, so a commit that
+   * matches but lives beyond the first page was invisible until "Load more".
+   * git log AND's --grep/--author and can't match hash/ref names, so we keep
+   * the exact 5-field client filter and instead page in every older commit
+   * automatically while searching: every match surfaces without a click, and
+   * once history is exhausted "Load more" is no longer needed for results.
+   * The Load-more button is untouched for normal (non-search) browsing.
+   */
+  useEffect(() => {
+    if (!isSearching) return;
+    if (loading || loadingMore) return;
+    if (!hasMore) return;
+
+    setLoadingMore(true);
+    void loadPage(commits.length)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+      .finally(() => setLoadingMore(false));
+  }, [isSearching, loading, loadingMore, hasMore, commits.length, loadPage, setError, setLoadingMore]);
   // Cumulative height of every open detail before a given display index, so a
   // row at index i sits at i*ROW_H + offsetByIndex[i] and each dot/link lands on
   // its (shifted) row. Recomputed whenever a measurement pass bumps heightTick.
@@ -287,7 +306,7 @@ export function HistoryView({
         {isSearching ? (
           <p className="px-1 pt-1 text-[10px] text-muted-foreground">
             {displayCommits.length} matching {displayCommits.length === 1 ? "commit" : "commits"}
-            {hasMore ? " — load more to search deeper" : ""}
+            {loadingMore ? " — searching…" : ""}
           </p>
         ) : null}
       </div>
@@ -296,10 +315,16 @@ export function HistoryView({
         {isSearching && displayCommits.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <Icon name="Search" className="size-4 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">No matching commits.</p>
-            {hasMore ? (
-              <p className="text-[10px] text-muted-foreground">Click "Load more" to search older commits.</p>
-            ) : null}
+{loadingMore ? (
+              <p className="text-xs text-muted-foreground">Searching older commits…</p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">No matching commits.</p>
+                {hasMore ? (
+                  <p className="text-[10px] text-muted-foreground">Click "Load more" to search older commits.</p>
+                ) : null}
+              </>
+            )}
           </div>
         ) : (
           <div
