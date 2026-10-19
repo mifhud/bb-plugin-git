@@ -53,6 +53,13 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       description: "Re-read git status every 5 seconds while the panel is open.",
       default: true,
     },
+    commitsPerPage: {
+      type: "number",
+      label: "Commits loaded at a time",
+      description:
+        "How many commits the History tab shows at a time, and how many matching commits a search finds before it pauses. Load more (or Search deeper while searching) keeps paging until the history is exhausted.",
+      default: 50,
+    },
     diffViewMode: {
       type: "select",
       label: "Default diff view",

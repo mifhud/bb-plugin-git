@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -12,6 +12,7 @@ import {
   computeGraphLinks,
 } from "@/lib/git-graph";
 import { computeCherryPickState } from "@/lib/commit-actions";
+import { nextSearchTarget, parseCommitsPerPage } from "@/lib/history-limit";
 import type { GitAction, GitCommit } from "../shared";
 import type { rpcContract } from "../contract";
 import { FileListView } from "@/components/FileListView";
@@ -35,7 +36,6 @@ import { type ViewMode } from "@/components/ChangesList";
  */
 const ROW_H = 46;
 const LANE_STEP = 12;
-const PAGE_SIZE = 50;
 
 export function HistoryView({
   rootId,
@@ -67,6 +67,9 @@ export function HistoryView({
   onFileHistory?: (file: string) => void;
 }) {
   const rpc = useRpc<typeof rpcContract>();
+  const { values: settingsValues } = useSettings();
+  /* Commits per page: how many rows load at a time, and a sweep's match budget. */
+  const pageSize = parseCommitsPerPage(settingsValues?.commitsPerPage);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,15 @@ export function HistoryView({
     mode?: "soft" | "mixed" | "hard";
   } | null>(null);
   const [resetPrompt, setResetPrompt] = useState<string | null>(null);
+  /*
+   * Match budget of the current search. Keyed by setting + query so a fresh
+   * query starts back at the configured page size instead of inheriting a
+   * budget the user raised for the previous one.
+   */
+  const [searchBudget, setSearchBudget] = useState<{ key: string; target: number }>({
+    key: "",
+    target: pageSize,
+  });
 
   /* Live detail elements + their measured heights, keyed by commit hash. */
   const detailRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -93,11 +105,11 @@ export function HistoryView({
 
   const loadPage = useCallback(
     async (skip: number): Promise<void> => {
-      const result = await rpc.call("commits", { rootId, repo, limit: PAGE_SIZE, skip });
+      const result = await rpc.call("commits", { rootId, repo, limit: pageSize, skip });
       setCommits((previous) => (skip === 0 ? result.commits : [...previous, ...result.commits]));
       setHasMore(result.hasMore);
     },
-    [rpc, rootId, repo],
+    [rpc, rootId, repo, pageSize],
   );
 
   useEffect(() => {
@@ -136,6 +148,10 @@ export function HistoryView({
 
   const searchTerm = query.trim().toLowerCase();
   const isSearching = searchTerm !== "";
+  const searchBudgetKey = `${pageSize}|${searchTerm}`;
+  /** Matches this sweep may reach; one page fresh, one more per "Search deeper". */
+  const searchTarget =
+    searchBudget.key === searchBudgetKey ? searchBudget.target : pageSize;
 
   const displayCommits = useMemo(
     () =>
@@ -153,24 +169,49 @@ export function HistoryView({
   );
 
   /*
+   * True once the sweep has found the configured page size worth of matches
+   * (and stopped on its own): "Search deeper" is then the only way to keep
+   * looking.
+   */
+  const atSearchLimit =
+    isSearching &&
+    hasMore &&
+    !loadingMore &&
+    Number.isFinite(searchTarget) &&
+    displayCommits.length >= searchTarget;
+
+  /*
    * Client-side filtering only sees already-loaded pages, so a commit that
    * matches but lives beyond the first page was invisible until "Load more".
    * git log AND's --grep/--author and can't match hash/ref names, so we keep
-   * the exact 5-field client filter and instead page in every older commit
-   * automatically while searching: every match surfaces without a click, and
-   * once history is exhausted "Load more" is no longer needed for results.
-   * The Load-more button is untouched for normal (non-search) browsing.
+   * the exact 5-field client filter and page in older commits automatically
+   * while searching — but only until one page's worth of matches is found.
+   * "Search deeper" raises it by another page, so one keystroke can no longer
+   * trigger an exhaustive sweep (thousands of --numstat pages) through a huge
+   * history. "Load more" stays untouched for normal (non-search) browsing.
    */
   useEffect(() => {
     if (!isSearching) return;
     if (loading || loadingMore) return;
     if (!hasMore) return;
+    if (displayCommits.length >= searchTarget) return;
 
     setLoadingMore(true);
     void loadPage(commits.length)
       .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoadingMore(false));
-  }, [isSearching, loading, loadingMore, hasMore, commits.length, loadPage, setError, setLoadingMore]);
+  }, [
+    isSearching,
+    loading,
+    loadingMore,
+    hasMore,
+    commits.length,
+    displayCommits.length,
+    searchTarget,
+    loadPage,
+    setError,
+    setLoadingMore,
+  ]);
   // Cumulative height of every open detail before a given display index, so a
   // row at index i sits at i*ROW_H + offsetByIndex[i] and each dot/link lands on
   // its (shifted) row. Recomputed whenever a measurement pass bumps heightTick.
@@ -306,7 +347,11 @@ export function HistoryView({
         {isSearching ? (
           <p className="px-1 pt-1 text-[10px] text-muted-foreground">
             {displayCommits.length} matching {displayCommits.length === 1 ? "commit" : "commits"}
-            {loadingMore ? " — searching…" : ""}
+            {loadingMore
+              ? " — searching…"
+              : atSearchLimit
+                ? " — search deeper to keep looking"
+                : ""}
           </p>
         ) : null}
       </div>
@@ -321,7 +366,7 @@ export function HistoryView({
               <>
                 <p className="text-xs text-muted-foreground">No matching commits.</p>
                 {hasMore ? (
-                  <p className="text-[10px] text-muted-foreground">Click "Load more" to search older commits.</p>
+                  <p className="text-[10px] text-muted-foreground">Searching older commits…</p>
                 ) : null}
               </>
             )}
@@ -582,8 +627,36 @@ export function HistoryView({
 
         {hasMore ? (
           <div className="flex justify-center py-2">
-            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" disabled={loadingMore} onClick={loadMore}>
-              {loadingMore ? "Loading…" : "Load more"}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={loadingMore || (isSearching && !atSearchLimit)}
+              onClick={() => {
+                if (!isSearching) {
+                  loadMore();
+                  return;
+                }
+                if (!atSearchLimit) return;
+                // Another page's worth of matches, counted from what is already
+                // found: a page that matched many commits cannot leave the next
+                // click with nothing to fetch.
+                setSearchBudget({
+                  key: searchBudgetKey,
+                  target: nextSearchTarget(displayCommits.length, pageSize),
+                });
+              }}
+            >
+              {loadingMore
+                ? isSearching
+                  ? "Searching…"
+                  : "Loading…"
+                : atSearchLimit
+                  ? `Search deeper (${displayCommits.length} found)`
+                  : isSearching
+                    ? "Searching…"
+                    : "Load more"}
             </Button>
           </div>
         ) : null}

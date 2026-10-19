@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileListView } from "@/components/FileListView";
 import type { ViewMode } from "@/components/ChangesList";
+import { parseCommitsPerPage } from "@/lib/history-limit";
 import type { GitCommit } from "../shared";
 import type { rpcContract } from "../contract";
 
@@ -17,8 +18,6 @@ import type { rpcContract } from "../contract";
  * root and repository come from the rail's selectors, so this panel never
  * resolves a root of its own.
  */
-
-const PAGE_SIZE = 50;
 
 export function FileHistoryPanel({
   rootId,
@@ -36,6 +35,9 @@ export function FileHistoryPanel({
   onOpenDiff?: (target: DiffTarget) => boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
+  const { values: settingsValues } = useSettings();
+  /* Same page size as the Graph tab: how many rows one load shows. */
+  const pageSize = parseCommitsPerPage(settingsValues?.commitsPerPage);
 
   const [filePath, setFilePath] = useState("");
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -53,13 +55,13 @@ export function FileHistoryPanel({
         rootId,
         repo,
         file: trimmed,
-        limit: PAGE_SIZE,
+        limit: pageSize,
         skip,
       });
       setCommits((prev) => (skip === 0 ? result.commits : [...prev, ...result.commits]));
       setHasMore(result.hasMore);
     },
-    [rpc, rootId, repo],
+    [rpc, rootId, repo, pageSize],
   );
 
   /** Reset the list state and load one path: the manual refresh and the graph
