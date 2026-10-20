@@ -44,6 +44,14 @@ function writePinnedRoot(id: string): void {
   }
 }
 
+/** Per-thread commit state slot — keeps message + AI generation flag
+ * isolated when switching BB threads. GitRail is mounted once per window,
+ * so a Map keyed by threadId gives each thread its own draft. */
+interface ThreadCommitState {
+  message: string;
+  generating: boolean;
+}
+
 /** Mounted once per BB window. Navigation never owns or unmounts the panel. */
 export function GitRail() {
   const rpc = useRpc<typeof rpcContract>();
@@ -101,6 +109,18 @@ export function GitRail() {
   const confirmDiscard = values?.confirmDiscard !== false;
   const autoRefresh = values?.autoRefresh !== false;
 
+  /* ------------------------ per-thread commit state -------------------- */
+  /**
+   * GitRail is a single window-level instance, but commit messages and AI
+   * generation must be isolated per BB thread. This Map stores the latest
+   * message and generating flag for each threadId; the useEffect below swaps
+   * them in/out of React state when threads change.
+   */
+  const threadCommitStateRef = useRef(new Map<string, ThreadCommitState>());
+  /** Tracks the active threadId for async callbacks (RPC .then chains),
+   *  which may resolve after the user has already switched threads. */
+  const currentThreadIdRef = useRef(threadId ?? "");
+
   /* -------------------------------- rail open state ------------------ */
   useEffect(() => {
     if (settingsLoading || initialized.current) return;
@@ -118,6 +138,41 @@ export function GitRail() {
     window.addEventListener(RAIL_EVENT, onRailEvent);
     return () => window.removeEventListener(RAIL_EVENT, onRailEvent);
   }, []);
+
+  /* ------------------------ per-thread commit state swap ---------------- */
+  /**
+   * When the BB thread changes, swap the commit message and AI-generation
+   * flag between React state and the per-thread Map slot. This ensures each
+   * thread keeps its own draft — switching threads does not carry text or
+   * in-flight generation across.
+   *
+   * message/generating are read from the closure of the render that triggered
+   * this threadId change, so the *previous* thread's values are saved before
+   * the new thread's values are loaded.
+   */
+  useEffect(() => {
+    const key = threadId ?? "";
+    // Save current state to the previous thread's slot.
+    const prevEntry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+    if (prevEntry !== undefined) {
+      prevEntry.message = message;
+      prevEntry.generating = generating;
+    } else {
+      threadCommitStateRef.current.set(currentThreadIdRef.current, { message, generating });
+    }
+    currentThreadIdRef.current = key;
+    // Restore the new thread's state (or initialise defaults).
+    const entry = threadCommitStateRef.current.get(key);
+    if (entry !== undefined) {
+      setMessage(entry.message);
+      setGenerating(entry.generating);
+    } else {
+      setMessage("");
+      setGenerating(false);
+      threadCommitStateRef.current.set(key, { message: "", generating: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
 
   /* -------------------------------- root choices --------------------- */
   const pinnedThreadId = selectedId?.startsWith("thread:") ? selectedId.slice(7) : null;
@@ -323,25 +378,49 @@ export function GitRail() {
     setCommitting(true);
     void runAction({ action: "commit", message }).then((ok) => {
       setCommitting(false);
-      if (ok) setMessage("");
+      if (ok) {
+        setMessage("");
+        // Persist the cleared draft to the current thread's slot.
+        const entry = threadCommitStateRef.current.get(threadId ?? "");
+        if (entry !== undefined) entry.message = "";
+      }
     });
   };
 
   const handleGenerateCommitMessage = (): void => {
     if (rootId === null || selectedId === null || stagedCount === 0) return;
+    const threadKey = threadId ?? "";
     setGenerating(true);
     void rpc
       .call("generateCommitMessage", { rootId, repo, rootKey: selectedId })
       .then((result) => {
         if (result.ok) {
-          setMessage(result.message);
-          setError(null);
-        } else {
+          // Always save to the originating thread's slot.
+          const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false };
+          entry.message = result.message;
+          threadCommitStateRef.current.set(threadKey, entry);
+          // Update the UI only if we are still on the same thread.
+          if (currentThreadIdRef.current === threadKey) {
+            setMessage(result.message);
+            setError(null);
+          }
+        } else if (currentThreadIdRef.current === threadKey) {
           setError(result.error);
         }
       })
-      .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
-      .finally(() => setGenerating(false));
+      .catch((cause) => {
+        if (currentThreadIdRef.current === threadKey) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      })
+      .finally(() => {
+        const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false };
+        entry.generating = false;
+        threadCommitStateRef.current.set(threadKey, entry);
+        if (currentThreadIdRef.current === threadKey) {
+          setGenerating(false);
+        }
+      });
   };
 
   /* -------------------------------- layout --------------------------- */
