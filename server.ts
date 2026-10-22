@@ -201,6 +201,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         ...(input.hash !== undefined ? { hash: input.hash } : {}),
         ...(input.mode !== undefined ? { mode: input.mode } : {}),
         ...(input.stash !== undefined ? { stash: input.stash } : {}),
+        ...(input.stagedOnly !== undefined ? { stagedOnly: input.stagedOnly } : {}),
       });
     },
     fileDiff: async (input) => {

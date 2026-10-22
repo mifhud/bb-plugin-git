@@ -98,6 +98,8 @@ export const rpcContract = defineRpcContract({
         /** soft | mixed | hard — only read for reset_commit. */
         mode: z.enum(["soft", "mixed", "hard"]).optional(),
         stash: z.string().max(64).optional(),
+        /** Only read for stash_push: stashes staged changes only (--staged). */
+        stagedOnly: z.boolean().optional(),
       })
       .strict(),
     output: actionResultSchema,

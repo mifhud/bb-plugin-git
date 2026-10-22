@@ -35,7 +35,7 @@ export function StashList({
 }: {
   rootId: string;
   repo: string;
-  runAction: (input: { action: GitAction; file?: string; stash?: string; message?: string }) => Promise<boolean>;
+  runAction: (input: { action: GitAction; file?: string; stash?: string; message?: string; stagedOnly?: boolean }) => Promise<boolean>;
   actionBusy: boolean;
   /** Bumped by the rail after any mutation; the list reloads on each bump. */
   refreshToken: number;
@@ -57,6 +57,8 @@ export function StashList({
 
   /* Inline stash input — a textarea, styled exactly like CommitBox. */
   const [stashMessage, setStashMessage] = useState("");
+  /* When true, the next stash push uses `--staged` (staged changes only). */
+  const [stashStagedOnly, setStashStagedOnly] = useState(false);
   /* Refs of stashes whose detail is expanded inline; several may be open. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   /* File list per stash ref, loaded the first time that stash is expanded. */
@@ -132,8 +134,15 @@ export function StashList({
 
   const handlePush = (): void => {
     if (actionBusy) return;
-    void runAction({ action: "stash_push", message: stashMessage.trim() || undefined }).then((ok) => {
-      if (ok) setStashMessage("");
+    void runAction({
+      action: "stash_push",
+      message: stashMessage.trim() || undefined,
+      ...(stashStagedOnly ? { stagedOnly: true } : {}),
+    }).then((ok) => {
+      if (ok) {
+        setStashMessage("");
+        setStashStagedOnly(false);
+      }
     });
   };
 
@@ -178,7 +187,17 @@ export function StashList({
           className="min-h-9 w-full resize-y rounded-md border border-input bg-transparent px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="truncate text-[10px] text-muted-foreground">Stash tracked changes</span>
+          <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={stashStagedOnly}
+              onChange={(event) => setStashStagedOnly(event.target.checked)}
+              disabled={actionBusy}
+              className="h-3 w-3 rounded border-border text-success focus-visible:ring-1 focus:ring-ring"
+              aria-label="Stash staged changes only"
+            />
+            <span className="truncate">Stash staged changes only</span>
+          </label>
           <Button
             type="button"
             size="sm"

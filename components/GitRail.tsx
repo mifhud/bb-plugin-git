@@ -314,6 +314,8 @@ export function GitRail() {
       hash?: string;
       mode?: "soft" | "mixed" | "hard";
       stash?: string;
+      /** Only read for stash_push: stashes staged changes only (--staged). */
+      stagedOnly?: boolean;
     }): Promise<boolean> => {
       if (rootId === null) return false;
       setBusy(true);

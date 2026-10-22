@@ -250,3 +250,75 @@ describe("stash_apply_file", () => {
   });
 });
 
+describe("stash_push", () => {
+  it("stashes staged changes only when stagedOnly is set", async () => {
+    const dir = makeRepo(1);
+    try {
+      // Two tracked files: file.txt staged, other.txt with an unstaged edit.
+      fs.writeFileSync(path.join(dir, "other.txt"), "line 0\n");
+      git(dir, ["add", "other.txt"]);
+      git(dir, ["commit", "-q", "-m", "add other"]);
+      fs.writeFileSync(path.join(dir, "file.txt"), "staged\n");
+      git(dir, ["add", "file.txt"]);
+      fs.writeFileSync(path.join(dir, "other.txt"), "unstaged\n");
+
+      const result = await runAction(dir, {
+        action: "stash_push",
+        stagedOnly: true,
+      });
+      assert.deepEqual(result, { ok: true });
+
+      // Staged change stashed: file.txt reverted to HEAD.
+      assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "line 0\n");
+      assert.equal(git(dir, ["diff", "--cached", "--name-only"]), "");
+      // Unstaged change preserved: other.txt still has the working-tree edit.
+      assert.equal(fs.readFileSync(path.join(dir, "other.txt"), "utf8"), "unstaged\n");
+      assert.ok(git(dir, ["stash", "list"]).length > 0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stashes staged and unstaged tracked changes by default", async () => {
+    const dir = makeRepo(1);
+    try {
+      // Two tracked files: file.txt staged, other.txt with an unstaged edit.
+      fs.writeFileSync(path.join(dir, "other.txt"), "line 0\n");
+      git(dir, ["add", "other.txt"]);
+      git(dir, ["commit", "-q", "-m", "add other"]);
+      fs.writeFileSync(path.join(dir, "file.txt"), "staged\n");
+      git(dir, ["add", "file.txt"]);
+      fs.writeFileSync(path.join(dir, "other.txt"), "unstaged\n");
+
+      const result = await runAction(dir, { action: "stash_push" });
+      assert.deepEqual(result, { ok: true });
+
+      // Both staged and unstaged tracked changes are stashed.
+      assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "line 0\n");
+      assert.equal(git(dir, ["diff", "--cached", "--name-only"]), "");
+      assert.equal(fs.readFileSync(path.join(dir, "other.txt"), "utf8"), "line 0\n");
+      assert.ok(git(dir, ["stash", "list"]).length > 0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes a stash message together with stagedOnly", async () => {
+    const dir = makeRepo(1);
+    try {
+      fs.writeFileSync(path.join(dir, "file.txt"), "staged\n");
+      git(dir, ["add", "file.txt"]);
+
+      const result = await runAction(dir, {
+        action: "stash_push",
+        message: "just staged",
+        stagedOnly: true,
+      });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "line 0\n");
+      assert.match(git(dir, ["stash", "list"]), /just staged/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

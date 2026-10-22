@@ -20,6 +20,8 @@ export interface ActInput {
   hash?: string;
   mode?: "soft" | "mixed" | "hard";
   stash?: string;
+  /** Only read for stash_push: stashes staged changes only (--staged). */
+  stagedOnly?: boolean;
 }
 
 export type ActOutcome = { ok: true } | { ok: false; error: string };
@@ -227,6 +229,7 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
     case "stash_push": {
       const message = input.message?.trim() ?? "";
       const args = ["stash", "push"];
+      if (input.stagedOnly === true) args.push("--staged");
       if (message !== "") args.push("-m", message);
       await expectOk(args, cwd);
       return;
