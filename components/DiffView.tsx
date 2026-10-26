@@ -73,8 +73,8 @@ export function DiffView({
     const style = document.createElement("style");
     style.id = styleId;
     style.textContent =
-      "[data-git-scroll]{overflow-y:scroll!important;overflow-x:auto!important;scrollbar-width:auto!important;-ms-overflow-style:auto!important}" +
-      "[data-git-scroll]::-webkit-scrollbar{display:block!important;width:14px!important;height:14px!important}" +
+      "[data-git-scroll]{overflow-y:scroll!important;overflow-x:auto!important;scrollbar-width:auto!important;scrollbar-color:auto!important;-ms-overflow-style:auto!important}" +
+      "[data-git-scroll]::-webkit-scrollbar{display:block!important;width:10px!important;height:10px!important}" +
       "[data-git-scroll]::-webkit-scrollbar-track{background:transparent!important}" +
       "[data-git-scroll]::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.4)!important;border-radius:4px!important}";
     document.head.appendChild(style);
