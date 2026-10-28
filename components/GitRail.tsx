@@ -18,32 +18,14 @@ import { diffNavigation } from "@/lib/diff-navigation";
 import { openDiffInPanel } from "@/lib/open-diff-panel";
 import { acquireRailInset, syncRailInset } from "@/lib/rail-inset";
 import { usePortalScopeProps } from "@/lib/portal-scope";
-import { RAIL_EVENT, initializeRailOpen, writeStoredOpen } from "@/lib/rail-state";
+import { subscribeGitDiff } from "@/lib/git-diff-bus";
+import { RAIL_EVENT, initializeRailOpen, readPinnedRoot, writePinnedRoot, writeStoredOpen } from "@/lib/rail-state";
 import { useRailWidthPx } from "@/lib/rail-width";
 import type { GitAction, GitChange, GitStatus, RootChoice } from "../shared";
 import type { rpcContract } from "../contract";
 
-const ROOT_STORAGE_KEY = "bb-plugin-git:pinned-root";
 const STATUS_POLL_MS = 5000;
 const REPO_POLL_MS = 1500;
-
-function readPinnedRoot(): string | null {
-  try {
-    const value = localStorage.getItem(ROOT_STORAGE_KEY);
-    return value !== null && /^(?:thread|source):[\w-]{1,128}$/u.test(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function writePinnedRoot(id: string): void {
-  try {
-    localStorage.setItem(ROOT_STORAGE_KEY, id);
-  } catch {
-    /* private mode: the choice lasts for this window only */
-  }
-}
-
 /** Per-thread commit state slot — keeps message + AI generation flag
  * isolated when switching BB threads. GitRail is mounted once per window,
  * so a Map keyed by threadId gives each thread its own draft. */
@@ -358,6 +340,22 @@ export function GitRail() {
       return openDiffInPanel(navigate, { rootKey: selectedId, repo, target });
     },
     [threadId, appNavigate, selectedId, repo],
+  );
+  /**
+   * Chat messages can carry a "show git diff" button (rendered by ChatPathBridge)
+   * that calls `requestGitDiffFile`. The rail is the only surface with the pinned
+   * root + repo, so it owns the bus listener. A ref keeps the closure current
+   * across re-renders without re-subscribing.
+   */
+  const openDiffRef = useRef(openDiff);
+  openDiffRef.current = openDiff;
+  useEffect(
+    () =>
+      subscribeGitDiff((request) => {
+        writeStoredOpen(true);
+        openDiffRef.current({ kind: "working", file: request.file, staged: false });
+      }),
+    [],
   );
 
   const openFileHistory = useCallback(

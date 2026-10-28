@@ -242,4 +242,8 @@ export const commitMessageResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), message: z.string() }),
   z.object({ ok: z.literal(false), error: z.string() }),
 ]);
-export type CommitMessageResult = z.infer<typeof commitMessageResultSchema>;
+/** Result of resolving which chat-mentioned paths exist in the workspace. */
+export const resolvePathsResultSchema = z.object({
+  known: z.array(z.string()),
+});
+export type ResolvePathsResult = z.infer<typeof resolvePathsResultSchema>;

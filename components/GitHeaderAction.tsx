@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { ChatPathBridge } from "@/components/ChatPathBridge";
 import { registerDiffNavigation } from "@/lib/diff-navigation";
 import { RAIL_EVENT, readStoredOpen, toggleRailOpen } from "@/lib/rail-state";
 
@@ -24,16 +25,19 @@ export function GitHeaderAction({ threadId }: { threadId: string }) {
   }, []);
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className="size-7"
-      aria-label={open ? "Hide git panel" : "Show git panel"}
-      aria-pressed={open}
-      onClick={toggleRailOpen}
-    >
-      <Icon name="GitBranch" className="size-4" />
-    </Button>
+    <>
+      <ChatPathBridge threadId={threadId} />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        aria-label={open ? "Hide git panel" : "Show git panel"}
+        aria-pressed={open}
+        onClick={toggleRailOpen}
+      >
+        <Icon name="GitBranch" className="size-4" />
+      </Button>
+    </>
   );
 }

@@ -1,9 +1,10 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
-import { GitRail } from "@/components/GitRail";
-import { GitHeaderAction } from "@/components/GitHeaderAction";
-import { GitDiffPanel } from "@/components/GitDiffPanel";
-import { GIT_DIFF_ACTION_ID } from "@/lib/open-diff-panel";
 import { AgentPicker } from "@/components/AgentPicker";
+import { GitDiffPanel } from "@/components/GitDiffPanel";
+import { GitHeaderAction } from "@/components/GitHeaderAction";
+import { GitRail } from "@/components/GitRail";
+import { NewThreadGitAction } from "@/components/NewThreadGitAction";
+import { GIT_DIFF_ACTION_ID } from "@/lib/open-diff-panel";
 import { toggleRailOpen, writeStoredOpen } from "@/lib/rail-state";
 
 export default definePluginApp((app) => {
@@ -52,6 +53,14 @@ export default definePluginApp((app) => {
     id: "hide-git-panel",
     title: "Git: hide panel",
     run: () => writeStoredOpen(false),
+  });
+
+  // A git icon in the New Thread composer's action strip, mirroring
+  // bb-plugin-file-explorer's NewThreadFileExplorerAction. Toggles the rail.
+  app.composer.customize({
+    id: "new-thread-git",
+    scopes: ["new-thread"],
+    actions: [{ id: "open-git-panel", component: NewThreadGitAction }],
   });
 
   app.slots.settingsSection({

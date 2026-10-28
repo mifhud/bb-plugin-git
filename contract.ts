@@ -15,6 +15,7 @@ import {
   repoListSchema,
   rootChoiceSchema,
   stashFilesSchema,
+  resolvePathsResultSchema,
   workspaceResultSchema,
 } from "./shared";
 
@@ -163,6 +164,20 @@ export const rpcContract = defineRpcContract({
   clientLog: {
     input: z.object({ message: z.string().max(2000) }).strict(),
     output: z.object({ ok: z.boolean() }),
+  },
+  /**
+   * Which of the given paths exist in the thread's workspace. The chat scanner
+   * calls this to decide whether a path mentioned in a message gets a git-diff
+   * button.
+   */
+  resolvePaths: {
+    input: z
+      .object({
+        threadId: z.string().min(1),
+        paths: z.array(z.string().trim().min(1).max(4096)).max(200),
+      })
+      .strict(),
+    output: resolvePathsResultSchema,
   },
   /**
    * Generate a commit message from the staged diff for the given repo.

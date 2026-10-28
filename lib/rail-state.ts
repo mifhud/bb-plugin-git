@@ -73,3 +73,23 @@ export function toggleRailOpen(): void {
   const currentlyOpen = readStoredOpen(false);
   writeStoredOpen(!currentlyOpen);
 }
+const ROOT_STORAGE_KEY = "bb-plugin-git:pinned-root";
+
+/** The pinned root choice id (`thread:<id>` / `source:<id>`), or null. */
+export function readPinnedRoot(): string | null {
+  try {
+    const value = localStorage.getItem(ROOT_STORAGE_KEY);
+    return value !== null && /^(?:thread|source):[\w-]{1,128}$/u.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the pinned root choice id so chat-diff buttons can address it. */
+export function writePinnedRoot(id: string): void {
+  try {
+    localStorage.setItem(ROOT_STORAGE_KEY, id);
+  } catch {
+    /* private mode: the choice lasts for this window only */
+  }
+}

@@ -307,8 +307,8 @@ function SectionAction({
 }
 
 /** Right-click menu shared by file and folder rows. Only the actions that fit
- *  the row's staged state are offered — never a disabled placeholder — and when
- *  the panel is busy the row renders its plain (non-menu) trigger. */
+ * the row's staged state are offered — never a disabled placeholder — and when
+ * the panel is busy the row renders its plain (non-menu) trigger. */
 function RowContextMenu({
   target,
   isStaged,

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { rpcContract } from "./contract";
@@ -247,6 +248,24 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
     clientLog: ({ message }) => {
       bb.log.info(`client: ${message}`);
       return { ok: true };
+    },
+    resolvePaths: async ({ threadId, paths }) => {
+      const workspace = await workspaceForThread(bb, threadId);
+      if (!workspace.ok) return { known: [] };
+      const { rootPath, hostId } = workspace.workspace;
+      if (!(await onThisComputer(hostId))) return { known: [] };
+      const known = paths.filter((p) => {
+        let resolved = p;
+        if (p.startsWith("~/")) resolved = path.join(process.env.HOME ?? "", p.slice(2));
+        if (!path.isAbsolute(resolved)) resolved = path.resolve(rootPath, p);
+        if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) return false;
+        try {
+          return existsSync(resolved);
+        } catch {
+          return false;
+        }
+      });
+      return { known };
     },
     generateCommitMessage: async (input) => {
       try {
