@@ -53,6 +53,45 @@ function makeRepo(commits: number): string {
   return dir;
 }
 
+/** A bare remote plus a local clone with one commit, wired as `origin`. */
+function makeRepoWithRemote(): { remote: string; dir: string } {
+  const remote = fs.mkdtempSync(path.join(os.tmpdir(), "git-push-remote-"));
+  git(remote, ["init", "--bare", "--initial-branch=main"]);
+  const dir = makeRepo(1);
+  git(dir, ["remote", "add", "origin", remote]);
+  return { remote, dir };
+}
+
+describe("push", () => {
+  it("fails when the branch has no upstream and setUpstream is not set", async () => {
+    const { remote, dir } = makeRepoWithRemote();
+    try {
+      const result = await runAction(dir, { action: "push" });
+      assert.equal(result.ok, false);
+      assert.match(result.ok ? "" : result.error, /upstream/i);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(remote, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes with setUpstream and records the tracking ref", async () => {
+    const { remote, dir } = makeRepoWithRemote();
+    try {
+      const branch = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      const result = await runAction(dir, { action: "push", setUpstream: true });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(
+        git(dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+        `origin/${branch}`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(remote, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("undo_commit", () => {
   it("undoes HEAD while keeping changes staged", async () => {
     const dir = makeRepo(2);

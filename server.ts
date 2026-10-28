@@ -159,6 +159,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         branch: read.branch,
         branches: read.branches,
         remoteBranches: read.remoteBranches,
+        hasUpstream: read.hasUpstream,
         ...(syncCount !== undefined ? { syncCount } : {}),
         repo: input.repo,
       };
@@ -198,10 +199,11 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         ...(input.file !== undefined ? { file: input.file } : {}),
         ...(input.message !== undefined ? { message: input.message } : {}),
         ...(input.branch !== undefined ? { branch: input.branch } : {}),
-        ...(input.hash !== undefined ? { hash: input.hash } : {}),
         ...(input.mode !== undefined ? { mode: input.mode } : {}),
+        ...(input.hash !== undefined ? { hash: input.hash } : {}),
         ...(input.stash !== undefined ? { stash: input.stash } : {}),
         ...(input.stagedOnly !== undefined ? { stagedOnly: input.stagedOnly } : {}),
+        ...(input.setUpstream !== undefined ? { setUpstream: input.setUpstream } : {}),
       });
     },
     fileDiff: async (input) => {

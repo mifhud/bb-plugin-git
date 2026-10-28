@@ -98,7 +98,8 @@ export const rpcContract = defineRpcContract({
         /** soft | mixed | hard — only read for reset_commit. */
         mode: z.enum(["soft", "mixed", "hard"]).optional(),
         stash: z.string().max(64).optional(),
-        /** Only read for stash_push: stashes staged changes only (--staged). */
+        /** Only read for push/sync: publish with `push --set-upstream origin HEAD`. */
+        setUpstream: z.boolean().optional(),
         stagedOnly: z.boolean().optional(),
       })
       .strict(),

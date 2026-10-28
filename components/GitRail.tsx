@@ -316,6 +316,8 @@ export function GitRail() {
       stash?: string;
       /** Only read for stash_push: stashes staged changes only (--staged). */
       stagedOnly?: boolean;
+      /** Only read for push: publish a branch with no upstream. */
+      setUpstream?: boolean;
     }): Promise<boolean> => {
       if (rootId === null) return false;
       setBusy(true);
@@ -374,6 +376,25 @@ export function GitRail() {
       return;
     }
     setConfirm({ message, confirmLabel: "Discard", destructive: true, run: execute });
+  };
+
+  /**
+   * Push / sync on a branch with no upstream would fail outright. Ask once,
+   * then publish: push --set-upstream origin HEAD creates the remote branch
+   * and points the local one at it. (Sync degrades to a plain publish — a
+   * pull has nothing to pull from before the branch exists remotely.)
+   */
+  const requestSyncAction = (action: "push" | "sync"): void => {
+    if (status !== null && !status.hasUpstream) {
+      setConfirm({
+        message: `Branch "${status.branch}" has no upstream. Publish it to origin?`,
+        confirmLabel: "Publish",
+        destructive: false,
+        run: () => runAction({ action: "push", setUpstream: true }),
+      });
+      return;
+    }
+    void runAction({ action });
   };
 
   const commitNow = (): void => {
@@ -648,9 +669,9 @@ export function GitRail() {
           isBusy={busy}
           onCheckout={(name) => void runAction({ action: "checkout", branch: name })}
           onCreateBranch={() => setBranchPrompt(true)}
-          onSync={() => void runAction({ action: "sync" })}
+          onSync={() => requestSyncAction("sync")}
           onPull={() => void runAction({ action: "pull" })}
-          onPush={() => void runAction({ action: "push" })}
+          onPush={() => requestSyncAction("push")}
           viewMode={viewMode}
           onViewModeChange={(mode) => {
             setViewMode(mode);

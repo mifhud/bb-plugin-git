@@ -102,6 +102,8 @@ export const gitStatusSchema = z.object({
   branch: z.string(),
   branches: z.array(z.string()),
   remoteBranches: z.array(z.string()),
+  /** False when the current branch has no upstream (a fresh local branch). */
+  hasUpstream: z.boolean(),
   syncCount: gitSyncCountSchema.optional(),
   /** Repo-relative path (`.` for the root repo). Echoed for scope checks. */
   repo: z.string(),

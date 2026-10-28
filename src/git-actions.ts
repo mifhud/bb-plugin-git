@@ -20,7 +20,8 @@ export interface ActInput {
   hash?: string;
   mode?: "soft" | "mixed" | "hard";
   stash?: string;
-  /** Only read for stash_push: stashes staged changes only (--staged). */
+  /** Only read for push/sync: publish with `push --set-upstream origin HEAD`. */
+  setUpstream?: boolean;
   stagedOnly?: boolean;
 }
 
@@ -179,10 +180,17 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
       invalidateRemoteRefs(targetDir);
       return;
     }
-    case "push":
-      await expectOk(["push"], { ...cwd, timeout: 120_000 });
+    case "push": {
+      // A fresh local branch has no upstream; `setUpstream` publishes it
+      // (the client asks first) and points its upstream at origin. `HEAD`
+      // keeps the branch name out of the argument list entirely.
+      const args = input.setUpstream === true
+        ? ["push", "--set-upstream", "origin", "HEAD"]
+        : ["push"];
+      await expectOk(args, { ...cwd, timeout: 120_000 });
       markRemoteRefsFresh(targetDir);
       return;
+    }
     case "pull":
       await expectOk(["pull", "--ff-only"], { ...cwd, timeout: 120_000 });
       markRemoteRefsFresh(targetDir);

@@ -17,6 +17,8 @@ export interface StatusRead {
   branch: string;
   branches: string[];
   remoteBranches: string[];
+  /** False for a fresh local branch: pushing it needs `--set-upstream`. */
+  hasUpstream: boolean;
 }
 
 /**
@@ -31,7 +33,7 @@ export async function readStatus(targetDir: string): Promise<StatusRead> {
     maxBuffer: 1024 * 1024,
   });
   if (!gitOk(statusResult)) {
-    return { isRepo: false, changes: [], branch: "", branches: [], remoteBranches: [] };
+    return { isRepo: false, changes: [], branch: "", branches: [], remoteBranches: [], hasUpstream: false };
   }
 
   const refsResult = await runGit(
@@ -49,6 +51,10 @@ export async function readStatus(targetDir: string): Promise<StatusRead> {
     const headResult = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], { cwd: targetDir });
     branch = gitOk(headResult) ? headResult.stdout.trim() : "";
   }
+  const upstreamResult = await runGit(
+    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+    { cwd: targetDir },
+  );
   if (branches.length === 0) {
     branches = branch !== "" ? [branch] : ["main"];
   } else if (branch !== "" && !branches.includes(branch)) {
@@ -61,5 +67,6 @@ export async function readStatus(targetDir: string): Promise<StatusRead> {
     branch: branch || "main",
     branches,
     remoteBranches,
+    hasUpstream: gitOk(upstreamResult),
   };
 }
