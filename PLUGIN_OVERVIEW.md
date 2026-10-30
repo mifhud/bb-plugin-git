@@ -10,7 +10,7 @@ A right-side rail that stays open across threads. The top selectors pin a worksp
 
 **Graph** is one lane graph over every local branch, remote-tracking branch and tag with paging, and per-commit detail: files with `+n −n`, copy hash, and cherry-pick / revert / reset (soft, mixed, hard) / merge / rebase. Cherry-pick is only offered where git can apply it — a commit outside the current branch, not a merge commit, with a clean tree — and the git side refuses those cases too. Clicking a file there reads its diff inside that commit.
 
-**History** takes a repo-relative path and lists every commit that touched that file, newest first with paging — the GitLens file-history view. Expand a commit for its files (`+n −n`) and click one to read that file's diff inside the commit.
+**History** takes a repo-relative path and lists every commit that touched that file, newest first with paging — the GitLens file-history view. Expand a commit to copy its hash or read its files (`+n −n`), and click one to read that file's diff inside that commit.
 
 Everything runs as git subprocesses on argv arrays in the plugin server, against the primary host only. Destructive steps confirm first; git's own error words stay on screen until dismissed.
 

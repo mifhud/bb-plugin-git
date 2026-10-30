@@ -202,6 +202,42 @@ export function FileHistoryPanel({
 
                 {expanded.has(commit.hash) ? (
                   <div className="border-t border-border/50 bg-background/50 py-1 pr-2">
+                    {/* Header: collapse + short hash + copy hash to clipboard. */}
+                    <div className="flex items-center gap-1.5 px-2 py-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0"
+                        aria-label="Collapse commit detail"
+                        onClick={() => toggleExpand(commit.hash)}
+                      >
+                        <Icon name="ChevronUp" className="size-4" />
+                      </Button>
+                      <span
+                        className="min-w-0 truncate font-mono text-[11px] text-foreground"
+                        title={commit.hash}
+                      >
+                        {commit.shortHash}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0 ml-auto"
+                        aria-label="Copy commit hash"
+                        onClick={() => {
+                          void rpc
+                            .call("copyTextToClipboard", { text: commit.hash })
+                            .then((result) => {
+                              if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
+                            })
+                            .catch(() => setError("Could not copy to the clipboard."));
+                        }}
+                      >
+                        <Icon name="Copy" className="size-3.5" />
+                      </Button>
+                    </div>
                     <p className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Files ({commit.files?.length ?? 0})
                     </p>
