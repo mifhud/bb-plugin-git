@@ -425,6 +425,21 @@ export function GitRail() {
             setMessage(result.message);
             setError(null);
           }
+          // Auto-commit (setting): the generated message is committed right
+          // away, without pressing Commit. Only while the same thread and
+          // repo are still active — a generation that resolved after the
+          // user switched threads just fills that thread's draft.
+          if (values?.autoCommitAfterGenerate === true && currentThreadIdRef.current === threadKey) {
+            setCommitting(true);
+            void runAction({ action: "commit", message: result.message }).then((ok) => {
+              setCommitting(false);
+              if (ok) {
+                const saved = threadCommitStateRef.current.get(threadKey);
+                if (saved !== undefined) saved.message = "";
+                if (currentThreadIdRef.current === threadKey) setMessage("");
+              }
+            });
+          }
         } else if (currentThreadIdRef.current === threadKey) {
           setError(result.error);
         }

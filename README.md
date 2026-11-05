@@ -29,6 +29,7 @@ bb plugin install git:https://github.com/<you>/bb-plugin-git.git@semver:^0.1.0
 - Show full file context in diffs
 - Commit message instruction
 - Commit message timeout
+- Auto-commit after generating a commit message
 - Stash staged changes only by default
 
 ## Develop

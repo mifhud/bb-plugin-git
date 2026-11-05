@@ -80,6 +80,13 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       description: "When enabled, the Stash tab's push checkbox defaults to checked (uses --staged). You can still override it per stash.",
       default: false,
     },
+    autoCommitAfterGenerate: {
+      type: "boolean",
+      label: "Auto-commit after generating a commit message",
+      description:
+        "When an AI-generated commit message arrives, commit immediately without pressing Commit.",
+      default: false,
+    },
     commitMessageInstruction: {
       type: "string",
       label: "Commit message instruction",
