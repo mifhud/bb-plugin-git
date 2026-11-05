@@ -74,6 +74,12 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       description: "Show the entire file in diffs instead of only the changed hunks. You can still toggle this per-diff in the diff toolbar.",
       default: false,
     },
+    stashStagedOnly: {
+      type: "boolean",
+      label: "Stash staged changes only by default",
+      description: "When enabled, the Stash tab's push checkbox defaults to checked (uses --staged). You can still override it per stash.",
+      default: false,
+    },
     commitMessageInstruction: {
       type: "string",
       label: "Commit message instruction",

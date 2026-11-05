@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
@@ -44,6 +44,7 @@ export function StashList({
   onOpenDiff?: (target: DiffTarget) => boolean;
 }) {
   const rpc = useRpc<typeof rpcContract>();
+  const { values: settingsValues } = useSettings();
 
   const [stashes, setStashes] = useState<GitStash[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,8 +58,11 @@ export function StashList({
 
   /* Inline stash input — a textarea, styled exactly like CommitBox. */
   const [stashMessage, setStashMessage] = useState("");
-  /* When true, the next stash push uses `--staged` (staged changes only). */
-  const [stashStagedOnly, setStashStagedOnly] = useState(false);
+  /* When true, the next stash push uses `--staged` (staged changes only).
+   * Defaults from the `stashStagedOnly` setting; the checkbox overrides it. */
+  const [stashStagedOnly, setStashStagedOnly] = useState(
+    () => settingsValues?.stashStagedOnly === true,
+  );
   /* Refs of stashes whose detail is expanded inline; several may be open. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   /* File list per stash ref, loaded the first time that stash is expanded. */
@@ -93,6 +97,11 @@ export function StashList({
     },
     [rpc, rootId, repo],
   );
+
+  /* Fold the saved default into the checkbox once settings load, like DiffView. */
+  useEffect(() => {
+    setStashStagedOnly(settingsValues?.stashStagedOnly === true);
+  }, [settingsValues?.stashStagedOnly]);
 
   /* Refresh the stash list on token bump. */
   useEffect(() => {
@@ -141,7 +150,7 @@ export function StashList({
     }).then((ok) => {
       if (ok) {
         setStashMessage("");
-        setStashStagedOnly(false);
+        setStashStagedOnly(settingsValues?.stashStagedOnly === true);
       }
     });
   };

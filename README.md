@@ -22,13 +22,14 @@ bb plugin install git:https://github.com/<you>/bb-plugin-git.git@semver:^0.1.0
 
 ## Settings
 
-```
-bb plugin config git
-```
-
 - Show the Git panel when BB opens
 - Ask before discarding changes
 - Refresh changes automatically (every 5 seconds while the panel is open)
+- Default diff view (unified / split)
+- Show full file context in diffs
+- Commit message instruction
+- Commit message timeout
+- Stash staged changes only by default
 
 ## Develop
 
