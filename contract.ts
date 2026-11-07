@@ -95,6 +95,10 @@ export const rpcContract = defineRpcContract({
         file: z.string().max(4096).optional(),
         message: z.string().max(20000).optional(),
         branch: z.string().max(255).optional(),
+        /** Only read for rename_branch: the branch's new name. */
+        newBranch: z.string().max(255).optional(),
+        /** Only read for delete_branch: `-D` instead of `-d`. */
+        force: z.boolean().optional(),
         hash: z.string().max(64).optional(),
         /** soft | mixed | hard — only read for reset_commit. */
         mode: z.enum(["soft", "mixed", "hard"]).optional(),

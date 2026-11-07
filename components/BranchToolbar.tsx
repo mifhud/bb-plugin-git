@@ -18,6 +18,8 @@ export function BranchToolbar({
   isBusy,
   onCheckout,
   onCreateBranch,
+  onRenameBranch,
+  onDeleteBranch,
   onSync,
   onPull,
   onPush,
@@ -31,6 +33,8 @@ export function BranchToolbar({
   syncCount?: GitSyncCount;
   isBusy: boolean;
   onCheckout: (branch: string) => void;
+  onRenameBranch: (branch: string) => void;
+  onDeleteBranch: (branch: string) => void;
   onCreateBranch: () => void;
   onSync: () => void;
   onPull: () => void;
@@ -43,13 +47,27 @@ export function BranchToolbar({
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
   const count = syncCount ?? { ahead: 0, behind: 0 };
+
+  useEffect(() => {
+    if (rowMenu === null) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rowMenuRef.current !== null && !rowMenuRef.current.contains(event.target as Node)) {
+        setRowMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [rowMenu]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
       if (rootRef.current !== null && !rootRef.current.contains(event.target as Node)) {
         setOpen(false);
+        setRowMenu(null);
       }
     };
     document.addEventListener("mousedown", onPointerDown);
@@ -78,6 +96,7 @@ export function BranchToolbar({
 
   const pick = (next: string) => {
     setOpen(false);
+    setRowMenu(null);
     if (next !== branch) onCheckout(next);
   };
 
@@ -108,19 +127,79 @@ export function BranchToolbar({
                 <div className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Local
                 </div>
-                {branches.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    role="menuitem"
-                    title={name}
-                    onClick={() => pick(name)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none hover:bg-state-hover"
-                  >
-                    <span className="whitespace-nowrap">{name}</span>
-                    {name === branch ? <Icon name="Check" className="size-3 shrink-0" /> : null}
-                  </button>
-                ))}
+                {branches.map((name) => {
+                  const isCurrent = name === branch;
+                  const rowOpen = rowMenu === name;
+                  return (
+                    <div
+                      key={name}
+                      ref={rowOpen ? rowMenuRef : undefined}
+                      className="relative flex w-full items-center gap-0.5 pr-1 hover:bg-state-hover"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        title={name}
+                        onClick={() => pick(name)}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none"
+                      >
+                        <span className="truncate whitespace-nowrap">{name}</span>
+                        {isCurrent ? <Icon name="Check" className="size-3 shrink-0" /> : null}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        title="Branch actions"
+                        aria-label={`Branch actions for ${name}`}
+                        aria-haspopup="menu"
+                        aria-expanded={rowOpen}
+                        disabled={isBusy}
+                        onClick={() => setRowMenu(rowOpen ? null : name)}
+                        className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-state-hover hover:text-foreground disabled:opacity-50"
+                      >
+                        <Icon name="MoreHorizontal" className="size-3" />
+                      </button>
+                      {rowOpen ? (
+                        <div
+                          role="menu"
+                          className="absolute right-0 top-full z-50 mt-0.5 w-32 rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={isBusy}
+                            onClick={() => {
+                              setRowMenu(null);
+                              setOpen(false);
+                              onRenameBranch(name);
+                            }}
+                            className="flex w-full items-center gap-2 px-2 py-1.5 text-[10px] text-left transition-none hover:bg-state-hover disabled:opacity-50"
+                          >
+                            <Icon name="EditFile" className="size-3 shrink-0 text-muted-foreground" />
+                            <span>Rename…</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            title={
+                              isCurrent ? "Cannot delete the checked-out branch" : undefined
+                            }
+                            disabled={isBusy || isCurrent}
+                            onClick={() => {
+                              setRowMenu(null);
+                              setOpen(false);
+                              onDeleteBranch(name);
+                            }}
+                            className="flex w-full items-center gap-2 px-2 py-1.5 text-[10px] text-left transition-none hover:bg-state-hover disabled:opacity-50"
+                          >
+                            <Icon name="Trash2" className="size-3 shrink-0 text-muted-foreground" />
+                            <span>Delete…</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </>
             ) : null}
             {remoteBranches.length > 0 ? (

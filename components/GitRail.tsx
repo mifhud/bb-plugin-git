@@ -8,7 +8,7 @@ import { useIsCompactViewport } from "@/components/ui/hooks/use-compact-viewport
 import { BranchToolbar } from "@/components/BranchToolbar";
 import { ChangesList, readStoredViewMode, writeStoredViewMode, type ViewMode } from "@/components/ChangesList";
 import { CommitBox } from "@/components/CommitBox";
-import { ConfirmDialog, PromptDialog } from "@/components/GitDialogs";
+import { ChoiceDialog, ConfirmDialog, PromptDialog } from "@/components/GitDialogs";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileHistoryPanel } from "@/components/FileHistoryPanel";
 import { HistoryView } from "@/components/HistoryView";
@@ -87,6 +87,8 @@ export function GitRail() {
     run: () => Promise<boolean>;
   } | null>(null);
   const [branchPrompt, setBranchPrompt] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const confirmDiscard = values?.confirmDiscard !== false;
   const autoRefresh = values?.autoRefresh !== false;
@@ -293,8 +295,10 @@ export function GitRail() {
       file?: string;
       message?: string;
       branch?: string;
-      hash?: string;
-      mode?: "soft" | "mixed" | "hard";
+      /** Only read for rename_branch: the branch's new name. */
+      newBranch?: string;
+      /** Only read for delete_branch: `-D` instead of `-d`. */
+      force?: boolean;
       stash?: string;
       /** Only read for stash_push: stashes staged changes only (--staged). */
       stagedOnly?: boolean;
@@ -681,6 +685,8 @@ export function GitRail() {
           syncCount={status?.syncCount}
           isBusy={busy}
           onCheckout={(name) => void runAction({ action: "checkout", branch: name })}
+          onRenameBranch={(name) => setRenameTarget(name)}
+          onDeleteBranch={(name) => setDeleteTarget(name)}
           onCreateBranch={() => setBranchPrompt(true)}
           onSync={() => requestSyncAction("sync")}
           onPull={() => void runAction({ action: "pull" })}
@@ -766,6 +772,41 @@ export function GitRail() {
           onConfirm={(branch) => {
             setBranchPrompt(false);
             void runAction({ action: "create_branch", branch });
+          }}
+        />
+      ) : null}
+      {renameTarget !== null ? (
+        <PromptDialog
+          key={`rename-${renameTarget}`}
+          title="Rename branch"
+          placeholder="feature/new-name"
+          initialValue={renameTarget}
+          confirmLabel="Rename"
+          busy={busy}
+          onCancel={() => setRenameTarget(null)}
+          onConfirm={(newName) => {
+            const target = renameTarget;
+            setRenameTarget(null);
+            void runAction({ action: "rename_branch", branch: target ?? "", newBranch: newName });
+          }}
+        />
+      ) : null}
+      {deleteTarget !== null ? (
+        <ChoiceDialog
+          message={`Delete branch '${deleteTarget}'?`}
+          choices={[
+            { label: "Safe delete", description: "refuses if not fully merged", value: "safe" },
+            { label: "Force delete", description: "deletes regardless of merge status", value: "force", destructive: true },
+          ]}
+          onCancel={() => setDeleteTarget(null)}
+          onChoose={(mode) => {
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            void runAction({
+              action: "delete_branch",
+              branch: target ?? "",
+              force: mode === "force",
+            });
           }}
         />
       ) : null}

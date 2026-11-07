@@ -160,6 +160,8 @@ export const gitActionSchema = z.enum([
   "commit",
   "checkout",
   "create_branch",
+  "rename_branch",
+  "delete_branch",
   "push",
   "pull",
   "sync",

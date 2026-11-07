@@ -213,6 +213,8 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
         ...(input.file !== undefined ? { file: input.file } : {}),
         ...(input.message !== undefined ? { message: input.message } : {}),
         ...(input.branch !== undefined ? { branch: input.branch } : {}),
+        ...(input.newBranch !== undefined ? { newBranch: input.newBranch } : {}),
+        ...(input.force !== undefined ? { force: input.force } : {}),
         ...(input.mode !== undefined ? { mode: input.mode } : {}),
         ...(input.hash !== undefined ? { hash: input.hash } : {}),
         ...(input.stash !== undefined ? { stash: input.stash } : {}),

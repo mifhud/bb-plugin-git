@@ -17,6 +17,10 @@ export interface ActInput {
   file?: string;
   message?: string;
   branch?: string;
+  /** Only read for rename_branch: the branch's new name. */
+  newBranch?: string;
+  /** Only read for delete_branch: `-D` instead of `-d`. */
+  force?: boolean;
   hash?: string;
   mode?: "soft" | "mixed" | "hard";
   stash?: string;
@@ -177,6 +181,33 @@ async function perform(targetDir: string, input: ActInput): Promise<void> {
     case "create_branch": {
       const branch = assertBranchName(requireText(input.branch, "branch"));
       await expectOk(["checkout", "-b", branch], cwd);
+      invalidateRemoteRefs(targetDir);
+      return;
+    }
+    case "rename_branch": {
+      const oldName = assertBranchName(requireText(input.branch, "branch"));
+      const newName = assertBranchName(requireText(input.newBranch, "newBranch"));
+      if (oldName === newName) {
+        throw new Error("The new branch name is the same as the old one.");
+      }
+      // `git branch -m <old> <new>` moves the ref and carries HEAD, config
+      // and the upstream along, so renaming the checked-out branch needs no
+      // checkout — git refuses when <new> already exists, and its stderr is
+      // the message the panel shows.
+      await expectOk(["branch", "-m", oldName, newName], cwd);
+      invalidateRemoteRefs(targetDir);
+      return;
+    }
+    case "delete_branch": {
+      const branch = assertBranchName(requireText(input.branch, "branch"));
+      // A checked-out branch cannot be deleted ("Cannot delete branch ... used
+      // by worktree"), so say so before git prints something about worktrees.
+      // A detached HEAD answers "HEAD", which never matches a branch name.
+      const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+      if (gitOk(head) && head.stdout.trim() === branch) {
+        throw new Error(`Cannot delete the checked-out branch "${branch}".`);
+      }
+      await expectOk(["branch", input.force === true ? "-D" : "-d", branch], cwd);
       invalidateRemoteRefs(targetDir);
       return;
     }

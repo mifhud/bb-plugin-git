@@ -126,11 +126,11 @@ export function ChoiceDialog({
   );
 }
 
-/** One-line input — new branch name. Enter confirms while non-empty. */
 export function PromptDialog({
   title,
   placeholder = "",
   confirmLabel = "Create",
+  initialValue = "",
   busy = false,
   onConfirm,
   onCancel,
@@ -138,11 +138,12 @@ export function PromptDialog({
   title: string;
   placeholder?: string;
   confirmLabel?: string;
+  initialValue?: string;
   busy?: boolean;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();

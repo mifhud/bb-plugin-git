@@ -361,3 +361,133 @@ describe("stash_push", () => {
     }
   });
 });
+
+describe("rename_branch", () => {
+  it("renames the current branch and moves HEAD", async () => {
+    const dir = makeRepo(1);
+    try {
+      const oldName = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      const result = await runAction(dir, { action: "rename_branch", branch: oldName, newBranch: "renamed" });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]), "renamed");
+      const branches = git(dir, ["branch", "--format=%(refname:short)"]).split(/\n/).map((s) => s.trim());
+      assert.ok(branches.includes("renamed"));
+      assert.ok(!branches.includes(oldName));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("renames a non-current branch without moving HEAD", async () => {
+    const dir = makeRepo(1);
+    try {
+      const head = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      git(dir, ["branch", "old"]);
+      const result = await runAction(dir, { action: "rename_branch", branch: "old", newBranch: "new" });
+      assert.deepEqual(result, { ok: true });
+      assert.equal(git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]), head);
+      const branches = git(dir, ["branch", "--format=%(refname:short)"]).split(/\n/).map((s) => s.trim());
+      assert.ok(branches.includes("new"));
+      assert.ok(!branches.includes("old"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an invalid new name", async () => {
+    const dir = makeRepo(1);
+    try {
+      const oldName = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      const result = await runAction(dir, { action: "rename_branch", branch: oldName, newBranch: "-bad" });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /Not a valid branch name/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects renaming to an existing name", async () => {
+    const dir = makeRepo(1);
+    try {
+      const oldName = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      git(dir, ["branch", "other"]);
+      const result = await runAction(dir, { action: "rename_branch", branch: oldName, newBranch: "other" });
+      assert.equal(result.ok, false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("delete_branch", () => {
+  it("safe-deletes a branch already merged into HEAD", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["branch", "topic"]);
+      const result = await runAction(dir, { action: "delete_branch", branch: "topic" });
+      assert.deepEqual(result, { ok: true });
+      const branches = git(dir, ["branch", "--format=%(refname:short)"]).split(/\n/).map((s) => s.trim());
+      assert.ok(!branches.includes("topic"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a safe delete of an unmerged branch", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["checkout", "-b", "topic"]);
+      fs.writeFileSync(path.join(dir, "file.txt"), "topic change\n");
+      git(dir, ["add", "."]);
+      git(dir, ["commit", "-m", "topic"]);
+      const main = "main";
+      // best-effort: default branch may be master; detect it
+      git(dir, ["checkout", "-"]);
+      const result = await runAction(dir, { action: "delete_branch", branch: "topic" });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /not fully merged/i);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("force-deletes an unmerged branch", async () => {
+    const dir = makeRepo(1);
+    try {
+      git(dir, ["checkout", "-b", "topic"]);
+      fs.writeFileSync(path.join(dir, "file.txt"), "topic change\n");
+      git(dir, ["add", "."]);
+      git(dir, ["commit", "-m", "topic"]);
+      git(dir, ["checkout", "-"]);
+      const result = await runAction(dir, { action: "delete_branch", branch: "topic", force: true });
+      assert.deepEqual(result, { ok: true });
+      const branches = git(dir, ["branch", "--format=%(refname:short)"]).split(/\n/).map((s) => s.trim());
+      assert.ok(!branches.includes("topic"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to delete the checked-out branch", async () => {
+    const dir = makeRepo(1);
+    try {
+      const current = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      const result = await runAction(dir, { action: "delete_branch", branch: current });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /checked-out branch/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an invalid branch name", async () => {
+    const dir = makeRepo(1);
+    try {
+      const result = await runAction(dir, { action: "delete_branch", branch: "-bad" });
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /Not a valid branch name/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
