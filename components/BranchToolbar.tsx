@@ -135,29 +135,21 @@ export function BranchToolbar({
                       key={name}
                       ref={rowOpen ? rowMenuRef : undefined}
                       className="relative flex w-full items-center gap-0.5 pr-1 hover:bg-state-hover"
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        if (isBusy) return;
+                        setRowMenu(rowOpen ? null : name);
+                      }}
                     >
                       <button
                         type="button"
                         role="menuitem"
                         title={name}
                         onClick={() => pick(name)}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none"
+                        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[10px] text-left transition-none"
                       >
                         <span className="truncate whitespace-nowrap">{name}</span>
                         {isCurrent ? <Icon name="Check" className="size-3 shrink-0" /> : null}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        title="Branch actions"
-                        aria-label={`Branch actions for ${name}`}
-                        aria-haspopup="menu"
-                        aria-expanded={rowOpen}
-                        disabled={isBusy}
-                        onClick={() => setRowMenu(rowOpen ? null : name)}
-                        className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-state-hover hover:text-foreground disabled:opacity-50"
-                      >
-                        <Icon name="MoreHorizontal" className="size-3" />
                       </button>
                       {rowOpen ? (
                         <div
