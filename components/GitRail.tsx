@@ -27,11 +27,12 @@ import type { rpcContract } from "../contract";
 const STATUS_POLL_MS = 5000;
 const REPO_POLL_MS = 1500;
 /** Per-thread commit state slot — keeps message + AI generation flag
- * isolated when switching BB threads. GitRail is mounted once per window,
+ * and error banner isolated when switching BB threads. GitRail is mounted once per window,
  * so a Map keyed by threadId gives each thread its own draft. */
 interface ThreadCommitState {
   message: string;
   generating: boolean;
+  error: string | null;
 }
 
 /** Mounted once per BB window. Navigation never owns or unmounts the panel. */
@@ -125,12 +126,12 @@ export function GitRail() {
 
   /* ------------------------ per-thread commit state swap ---------------- */
   /**
-   * When the BB thread changes, swap the commit message and AI-generation
-   * flag between React state and the per-thread Map slot. This ensures each
-   * thread keeps its own draft — switching threads does not carry text or
-   * in-flight generation across.
+   * When the BB thread changes, swap the commit message, AI-generation
+   * flag, and error between React state and the per-thread Map slot. This ensures
+   * each thread keeps its own draft and error banner — switching threads does
+   * not carry text, in-flight generation, or errors across.
    *
-   * message/generating are read from the closure of the render that triggered
+   * message/generating/error are read from the closure of the render that triggered
    * this threadId change, so the *previous* thread's values are saved before
    * the new thread's values are loaded.
    */
@@ -141,8 +142,9 @@ export function GitRail() {
     if (prevEntry !== undefined) {
       prevEntry.message = message;
       prevEntry.generating = generating;
+      prevEntry.error = error;
     } else {
-      threadCommitStateRef.current.set(currentThreadIdRef.current, { message, generating });
+      threadCommitStateRef.current.set(currentThreadIdRef.current, { message, generating, error });
     }
     currentThreadIdRef.current = key;
     // Restore the new thread's state (or initialise defaults).
@@ -150,10 +152,12 @@ export function GitRail() {
     if (entry !== undefined) {
       setMessage(entry.message);
       setGenerating(entry.generating);
+      setError(entry.error);
     } else {
       setMessage("");
       setGenerating(false);
-      threadCommitStateRef.current.set(key, { message: "", generating: false });
+      setError(null);
+      threadCommitStateRef.current.set(key, { message: "", generating: false, error: null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
@@ -259,14 +263,20 @@ export function GitRail() {
     [rpc, rootId, repo],
   );
 
+  const dismissError = useCallback((): void => {
+    setError(null);
+    const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+    if (entry !== undefined) entry.error = null;
+  }, []);
+
   /* Errors persist for at least a minute so the user can read git's
    * message — the 5s poll no longer wipes them, and a successful action
    * still dismisses them immediately. */
   useEffect(() => {
     if (error === null) return;
-    const timer = window.setTimeout(() => setError(null), 60_000);
+    const timer = window.setTimeout(dismissError, 60_000);
     return () => window.clearTimeout(timer);
-  }, [error]);
+  }, [error, dismissError]);
 
   useEffect(() => {
     if (!railOpen || rootId === null) return;
@@ -311,15 +321,22 @@ export function GitRail() {
         const result = await rpc.call("act", { rootId, repo, ...input });
         if (result.ok) {
           setError(null);
+          const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+          if (entry !== undefined) entry.error = null;
           await readStatus(false);
           setHistoryToken((token) => token + 1);
           setStashToken((token) => token + 1);
           return true;
         }
         setError(result.error);
+        const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+        if (entry !== undefined) entry.error = result.error;
         return false;
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setError(message);
+        const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+        if (entry !== undefined) entry.error = message;
         return false;
       } finally {
         setBusy(false);
@@ -407,7 +424,10 @@ export function GitRail() {
         setMessage("");
         // Persist the cleared draft to the current thread's slot.
         const entry = threadCommitStateRef.current.get(threadId ?? "");
-        if (entry !== undefined) entry.message = "";
+        if (entry !== undefined) {
+          entry.message = "";
+          entry.error = null;
+        }
       }
     });
   };
@@ -416,13 +436,21 @@ export function GitRail() {
     if (rootId === null || selectedId === null || stagedCount === 0) return;
     const threadKey = threadId ?? "";
     setGenerating(true);
+    const initialEntry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: true, error: null };
+    initialEntry.generating = true;
+    initialEntry.error = null;
+    threadCommitStateRef.current.set(threadKey, initialEntry);
+    if (currentThreadIdRef.current === threadKey) {
+      setError(null);
+    }
     void rpc
       .call("generateCommitMessage", { rootId, repo, rootKey: selectedId })
       .then((result) => {
         if (result.ok) {
           // Always save to the originating thread's slot.
-          const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false };
+          const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false, error: null };
           entry.message = result.message;
+          entry.error = null;
           threadCommitStateRef.current.set(threadKey, entry);
           // Update the UI only if we are still on the same thread.
           if (currentThreadIdRef.current === threadKey) {
@@ -439,22 +467,34 @@ export function GitRail() {
               setCommitting(false);
               if (ok) {
                 const saved = threadCommitStateRef.current.get(threadKey);
-                if (saved !== undefined) saved.message = "";
+                if (saved !== undefined) {
+                  saved.message = "";
+                  saved.error = null;
+                }
                 if (currentThreadIdRef.current === threadKey) setMessage("");
               }
             });
           }
-        } else if (currentThreadIdRef.current === threadKey) {
-          setError(result.error);
+        } else {
+          const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false, error: null };
+          entry.error = result.error;
+          threadCommitStateRef.current.set(threadKey, entry);
+          if (currentThreadIdRef.current === threadKey) {
+            setError(result.error);
+          }
         }
       })
       .catch((cause) => {
+        const errorMsg = cause instanceof Error ? cause.message : String(cause);
+        const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false, error: null };
+        entry.error = errorMsg;
+        threadCommitStateRef.current.set(threadKey, entry);
         if (currentThreadIdRef.current === threadKey) {
-          setError(cause instanceof Error ? cause.message : String(cause));
+          setError(errorMsg);
         }
       })
       .finally(() => {
-        const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false };
+        const entry = threadCommitStateRef.current.get(threadKey) ?? { message: "", generating: false, error: null };
         entry.generating = false;
         threadCommitStateRef.current.set(threadKey, entry);
         if (currentThreadIdRef.current === threadKey) {
@@ -735,7 +775,7 @@ export function GitRail() {
             type="button"
             aria-label="Dismiss error"
             className="shrink-0 text-muted-foreground hover:text-foreground"
-            onClick={() => setError(null)}
+            onClick={dismissError}
           >
             <Icon name="X" className="size-3" />
           </button>
