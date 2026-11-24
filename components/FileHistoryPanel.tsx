@@ -11,7 +11,7 @@ import type { GitCommit } from "../shared";
 import type { rpcContract } from "../contract";
 
 /**
- * The rail's History tab: every commit that touched one file, mimicking
+ * The rail's File tab: every commit that touched one file, mimicking
  * VS Code GitLens. Enter a repo-relative path to list the commits, expand one
  * for its files, and click a file to read its diff — in BB's side panel, or
  * the rail's inline drawer when the surface has no side panel. The workspace
@@ -36,7 +36,7 @@ export function FileHistoryPanel({
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const { values: settingsValues } = useSettings();
-  /* Same page size as the Graph tab: how many rows one load shows. */
+  /* Same page size as the commit tabs: how many rows one load shows. */
   const pageSize = parseCommitsPerPage(settingsValues?.commitsPerPage);
 
   const [filePath, setFilePath] = useState("");
@@ -94,8 +94,8 @@ export function FileHistoryPanel({
   };
 
   /* A path injected from the graph tab's right-click "File History" jumps the
-   * History tab to that file. The pane remounts on each visit to the History
-   * tab, so this fires fresh whenever the tab opens with a pending path. */
+   * File tab to that file. The pane remounts on each visit to the File tab, so
+   * this fires fresh whenever the tab opens with a pending path. */
   useEffect(() => {
     if (targetPath == null) return;
     resetAndLoad(targetPath);

@@ -58,7 +58,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       type: "number",
       label: "Commits loaded at a time",
       description:
-        "How many commits the History tab shows at a time, and how many matching commits a search finds before it pauses. Load more (or Search deeper while searching) keeps paging until the history is exhausted.",
+        "How many commits the Graph, History and File tabs show at a time, and how many matching commits a search finds before it pauses. Load more (or Search deeper while searching) keeps paging until the history is exhausted.",
       default: 50,
     },
     diffViewMode: {
@@ -236,7 +236,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
     commits: async (input) => {
       const rootPath = await requireLocalRoot(input.rootId);
       const targetDir = resolveRepoDir(rootPath, input.repo);
-      return fetchGitCommits(targetDir, input.limit, input.skip);
+      return fetchGitCommits(targetDir, input.limit, input.skip, input.scope ?? "all");
     },
     commitDiff: async (input) => {
       try {

@@ -6,7 +6,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { CommitPage, GitCommit, GitCommitFile } from "../shared";
+import type { CommitPage, CommitScope, GitCommit, GitCommitFile } from "../shared";
 import { gitOk, runGit } from "./shell.ts";
 import { FULL_CONTEXT } from "./git-diff.ts";
 
@@ -74,17 +74,25 @@ export function parseGitLogOutput(stdout: string): GitCommit[] {
  * compare — so the graph walks every local branch, remote-tracking branch and
  * tag, the way GitKraken and VSCode's Source Control Graph do. `HEAD` keeps a
  * detached checkout visible; the stash and notes namespaces stay out.
+ *
+ * The History tab asks for `head` instead: the classic `git log` list of what
+ * the current branch contains, which is what a linear list without lanes can
+ * be read as. Both scopes share this one fetch, so paging, parsing and ref
+ * decoration cannot drift between the two tabs.
  */
 const GRAPH_REVISIONS = ["HEAD", "--branches", "--remotes", "--tags"];
+const HEAD_REVISIONS = ["HEAD"];
 
-/** One page of the graph, newest first. `hasMore` drives the Load-more button. */
+/** One page of commits, newest first. `hasMore` drives the Load-more button. */
 export async function fetchGitCommits(
   targetDir: string,
   limit: number = 50,
   skip: number = 0,
+  scope: CommitScope = "all",
 ): Promise<CommitPage> {
+  const revisions = scope === "head" ? HEAD_REVISIONS : GRAPH_REVISIONS;
   let total = 0;
-  const countResult = await runGit(["rev-list", "--count", ...GRAPH_REVISIONS], {
+  const countResult = await runGit(["rev-list", "--count", ...revisions], {
     cwd: targetDir,
     timeout: 10_000,
   });
@@ -101,7 +109,7 @@ export async function fetchGitCommits(
       "--date-order",
       "--pretty=format:COMMIT_SPLIT|~|%H|~|%h|~|%an|~|%ad|~|%s|~|%D|~|%p",
       "--date=format:%b %d, %Y, %I:%M %p",
-      ...GRAPH_REVISIONS,
+      ...revisions,
     ],
     { cwd: targetDir, timeout: 15_000 },
   );

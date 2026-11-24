@@ -6,6 +6,7 @@ import {
   commitDiffResultSchema,
   commitMessageResultSchema,
   commitPageSchema,
+  commitScopeSchema,
   fileDiffSchema,
   fileHistorySchema,
   gitActionSchema,
@@ -124,13 +125,15 @@ export const rpcContract = defineRpcContract({
       .strict(),
     output: fileDiffSchema,
   },
-  /** One page of commit history, newest first. */
+  /** One page of commit history, newest first. `scope` picks the revision set. */
   commits: {
     input: z.object({
       rootId: z.string().min(1),
       repo: z.string().max(4096),
       limit: z.number().int().min(1).max(200),
       skip: z.number().int().min(0),
+      /** `all` (default): every branch, remote and tag. `head`: this branch. */
+      scope: commitScopeSchema.optional(),
     }).strict(),
     output: commitPageSchema,
   },

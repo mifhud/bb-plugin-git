@@ -1,8 +1,8 @@
 /**
- * Paging policy for the commit lists. One page is how many commits the History
- * tab loads at a time, and a search sweep stops once it has found that many
- * matches — "Load more" / "Search deeper" advance by one more page each time.
- * Pure so `node --test` can import it.
+ * Paging policy for the commit lists. One page is how many commits a commit tab
+ * (Graph, History, File) loads at a time, and a search sweep stops once it has
+ * found that many matches — "Load more" / "Search deeper" advance by one more
+ * page each time. Pure so `node --test` can import it.
  */
 
 export const DEFAULT_COMMITS_PER_PAGE = 50;

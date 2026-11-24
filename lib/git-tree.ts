@@ -4,7 +4,7 @@
  * state lives in the component that renders it).
  *
  * Generic over `T extends { file: string }` so the same builder powers the
- * Changes tree (GitChange[]) and the History/Stash file lists
+ * Changes tree (GitChange[]) and the commit and stash file lists
  * (GitCommitFile[] / GitStashFile[]).
  */
 

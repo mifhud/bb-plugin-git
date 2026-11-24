@@ -71,7 +71,7 @@ export function GitRail() {
   const [manualTick, setManualTick] = useState(0);
 
   // Tab / detail / drafts.
-  const [tab, setTab] = useState<"changes" | "graph" | "stash" | "history">("changes");
+  const [tab, setTab] = useState<"changes" | "graph" | "history" | "file" | "stash">("changes");
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   const [message, setMessage] = useState("");
   const [diffFile, setDiffFile] = useState<GitChange | null>(null);
@@ -395,7 +395,7 @@ export function GitRail() {
   const openFileHistory = useCallback(
     (file: string): void => {
       setFileHistoryPath(file);
-      setTab("history");
+      setTab("file");
     },
     [],
   );
@@ -551,11 +551,16 @@ export function GitRail() {
         </div>
       );
     }
-    if (tab === "graph") {
+    if (tab === "graph" || tab === "history") {
       // Untracked files do not block a pick; edits to tracked ones do.
       const dirty = status.changes.some((change) => change.status !== "??");
+      // Keyed by tab so the two readings never share one instance's state: they
+      // are the same component, and the graph's loaded page would otherwise
+      // stay on screen while the history page loads.
       return (
         <HistoryView
+          key={tab}
+          mode={tab === "graph" ? "graph" : "history"}
           rootId={rootId}
           repo={repo}
           refreshToken={historyToken}
@@ -581,7 +586,7 @@ export function GitRail() {
         />
       );
     }
-    if (tab === "history") {
+    if (tab === "file") {
       // Remount on a root or repo switch: the previous file path and its
       // commits belong to the old repository.
       return (
@@ -757,7 +762,7 @@ export function GitRail() {
 
       {isRepo ? (
         <div className="flex shrink-0 items-center border-b border-sidebar-border px-1.5 py-1">
-          {(["changes", "graph", "stash", "history"] as const).map((name) => (
+          {(["changes", "graph", "history", "file", "stash"] as const).map((name) => (
             <button
               key={name}
               type="button"

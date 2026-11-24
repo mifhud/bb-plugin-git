@@ -19,12 +19,18 @@ import { FileListView } from "@/components/FileListView";
 import { type ViewMode } from "@/components/ChangesList";
 
 /**
- * Graph tab: commits with a lane graph gutter. Clicking a commit expands an
- * inline detail directly beneath that row (show/hide, like a tree dropdown) —
- * no stage switch, and any number of rows can be open at once without closing
- * the others. The panel shows the commit message, refs, a copy-hash button,
- * commit-level actions (cherry-pick, revert, reset, undo, rebase) and a file
- * list whose diffs open as side-panel tabs or an in-rail drawer.
+ * The commit list, in either reading: `graph` draws a lane gutter over every
+ * branch, remote-tracking branch and tag; `history` draws a single spine over
+ * the commits the checked-out branch contains (`git log`). Only the gutter and
+ * the revision scope differ — rows, search, paging, the inline detail and the
+ * commit actions are one implementation, so the two tabs cannot drift apart.
+ *
+ * Clicking a commit expands an inline detail directly beneath that row
+ * (show/hide, like a tree dropdown) — no stage switch, and any number of rows
+ * can be open at once without closing the others. The panel shows the commit
+ * message, refs, a copy-hash button, commit-level actions (cherry-pick, revert,
+ * reset, undo, rebase) and a file list whose diffs open as side-panel tabs or
+ * an in-rail drawer.
  *
  * Rows are absolutely positioned over a fixed-height SVG graph, so the detail
  * sits on its own layer right under the clicked row and every row/dot/link
@@ -36,6 +42,9 @@ import { type ViewMode } from "@/components/ChangesList";
  */
 const ROW_H = 46;
 const LANE_STEP = 12;
+/** History mode's gutter: one spine, no lanes — narrow enough to read as a list. */
+const SPINE_X = 8;
+const SPINE_GUTTER_WIDTH = 18;
 
 export function HistoryView({
   rootId,
@@ -45,6 +54,7 @@ export function HistoryView({
   actionBusy,
   viewMode,
   dirty,
+  mode,
   onOpenDiff,
   onFileHistory,
 }: {
@@ -61,9 +71,15 @@ export function HistoryView({
   viewMode: ViewMode;
   /** Uncommitted changes to tracked files: git refuses to cherry-pick then. */
   dirty: boolean;
+  /**
+   * Which reading of the commit list this tab shows. `graph` walks every
+   * branch, remote and tag and draws lanes; `history` walks the checked-out
+   * branch and draws one spine.
+   */
+  mode: "graph" | "history";
   /** Open a commit file's diff as a side-panel tab; false keeps the in-rail view. */
   onOpenDiff?: (target: DiffTarget) => boolean;
-  /** Jump the rail's History tab to a file's history for the graph's right-click menu. */
+  /** Jump the rail's File tab to a file's history for the graph's right-click menu. */
   onFileHistory?: (file: string) => void;
 }) {
   const rpc = useRpc<typeof rpcContract>();
@@ -105,11 +121,17 @@ export function HistoryView({
 
   const loadPage = useCallback(
     async (skip: number): Promise<void> => {
-      const result = await rpc.call("commits", { rootId, repo, limit: pageSize, skip });
+      const result = await rpc.call("commits", {
+        rootId,
+        repo,
+        limit: pageSize,
+        skip,
+        scope: mode === "history" ? "head" : "all",
+      });
       setCommits((previous) => (skip === 0 ? result.commits : [...previous, ...result.commits]));
       setHasMore(result.hasMore);
     },
-    [rpc, rootId, repo, pageSize],
+    [rpc, rootId, repo, pageSize, mode],
   );
 
   useEffect(() => {
@@ -225,13 +247,21 @@ export function HistoryView({
   }, [displayCommits, expanded, heightTick]);
   const offsetAt = (index: number): number => offsetByIndex[index] ?? 0;
 
-  const laneMap = useMemo(() => computeCommitLanes(commits), [commits]);
+  /* Lanes are graph mode's alone: history mode has one spine and no topology. */
+  const laneMap = useMemo(
+    () => (mode === "graph" ? computeCommitLanes(commits) : new Map<string, number>()),
+    [commits, mode],
+  );
   const maxLane = useMemo(() => {
     let max = 0;
     for (const lane of laneMap.values()) max = Math.max(max, lane);
     return max;
   }, [laneMap]);
-  const gutterWidth = isSearching ? 0 : 16 + maxLane * LANE_STEP + 8;
+  const gutterWidth = isSearching
+    ? 0
+    : mode === "graph"
+      ? 16 + maxLane * LANE_STEP + 8
+      : SPINE_GUTTER_WIDTH;
 
   const positions = useMemo(() => {
     const map: Record<string, number> = {};
@@ -242,9 +272,25 @@ export function HistoryView({
   }, [commits, offsetByIndex]);
   const graphHeight = commits.length * ROW_H + (offsetByIndex[commits.length] ?? 0);
   const links = useMemo(
-    () => computeGraphLinks(commits, laneMap, positions, graphHeight),
-    [commits, laneMap, positions, graphHeight],
+    () => (mode === "graph" ? computeGraphLinks(commits, laneMap, positions, graphHeight) : []),
+    [mode, commits, laneMap, positions, graphHeight],
   );
+  /*
+   * History mode's spine: one segment per consecutive pair, so it bends around
+   * an open detail the same way a lane does instead of cutting through it.
+   */
+  const spineLinks = useMemo(() => {
+    if (mode !== "history" || isSearching) return [];
+    const segments: { key: string; fromY: number; toY: number }[] = [];
+    for (let index = 0; index < commits.length - 1; index++) {
+      segments.push({
+        key: `${commits[index].hash}:${commits[index + 1].hash}`,
+        fromY: positions[commits[index].hash] ?? 0,
+        toY: positions[commits[index + 1].hash] ?? 0,
+      });
+    }
+    return segments;
+  }, [mode, isSearching, commits, positions]);
   const laneX = (lane: number): number => 12 + lane * LANE_STEP;
 
   // Measure every open detail after each commit (pre-paint) and re-render once
@@ -378,30 +424,43 @@ export function HistoryView({
           >
             {!isSearching ? (
               <svg
-                className="pointer-events-none absolute left-0 top-0"
+                className="pointer-events-none absolute left-0 top-0 text-muted-foreground"
                 width={gutterWidth}
                 height={graphHeight}
                 aria-hidden="true"
               >
-                {links.map((link, index) => (
-                  <path
-                    key={`${link.fromHash}:${link.toHash}:${index}`}
-                    d={buildBezierPath(laneX(link.fromLane), link.fromY, laneX(link.toLane), link.toY)}
-                    stroke={link.color}
-                    strokeWidth={1.5}
-                    fill="none"
-                    opacity={0.85}
-                  />
-                ))}
+                {mode === "graph"
+                  ? links.map((link, index) => (
+                      <path
+                        key={`${link.fromHash}:${link.toHash}:${index}`}
+                        d={buildBezierPath(laneX(link.fromLane), link.fromY, laneX(link.toLane), link.toY)}
+                        stroke={link.color}
+                        strokeWidth={1.5}
+                        fill="none"
+                        opacity={0.85}
+                      />
+                    ))
+                  : spineLinks.map((segment) => (
+                      <path
+                        key={segment.key}
+                        d={buildBezierPath(SPINE_X, segment.fromY, SPINE_X, segment.toY)}
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        fill="none"
+                        opacity={0.4}
+                      />
+                    ))}
                 {commits.map((commit) => {
                   const lane = laneMap.get(commit.hash) ?? 0;
                   const y = positions[commit.hash] ?? 0;
                   const isHead = commit.refs?.some((ref) => ref.startsWith("HEAD")) === true;
+                  const dot = mode === "graph" ? LANE_COLORS[lane % LANE_COLORS.length] : "currentColor";
+                  const cx = mode === "graph" ? laneX(lane) : SPINE_X;
                   return (
                     <g key={commit.hash}>
-                      <circle cx={laneX(lane)} cy={y} r={isHead ? 4.5 : 3.5} fill={LANE_COLORS[lane % LANE_COLORS.length]} />
+                      <circle cx={cx} cy={y} r={isHead ? 4.5 : 3.5} fill={dot} />
                       {isHead ? (
-                        <circle cx={laneX(lane)} cy={y} r={6.5} fill="none" stroke={LANE_COLORS[lane % LANE_COLORS.length]} strokeWidth={1} opacity={0.6} />
+                        <circle cx={cx} cy={y} r={6.5} fill="none" stroke={dot} strokeWidth={1} opacity={0.6} />
                       ) : null}
                     </g>
                   );

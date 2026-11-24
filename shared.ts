@@ -192,6 +192,15 @@ export const commitPageSchema = z.object({
 });
 export type CommitPage = z.infer<typeof commitPageSchema>;
 
+/**
+ * Which revisions a commit page covers. `all` walks every local branch,
+ * remote-tracking branch and tag (see `GRAPH_REVISIONS` in `src/git-log.ts`);
+ * `head` walks only what the checked-out branch contains — the classic
+ * `git log` list.
+ */
+export const commitScopeSchema = z.enum(["all", "head"]);
+export type CommitScope = z.infer<typeof commitScopeSchema>;
+
 export const commitDiffResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), diff: z.string(), file: z.string() }),
   z.object({ ok: z.literal(false), error: z.string() }),

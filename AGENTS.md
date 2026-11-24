@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents working in this repository.
 
 ## Project Overview
 
-**bb-plugin-git** is a [BB](https://getbb.app) plugin that shows a source-control panel across threads: status, stage/unstage/discard, commit, branches, push/pull/sync, diff viewer, and commit history with a graph. Git feature logic is ported from **ompchamber** (`src/server/lib/fs/git-*`, `src/shared/lib/fs/*`); the plugin skeleton, rail, pinned-root flow, and UI primitives come from **bb-plugin-file-tree**. Built with TypeScript, React 19, and Tailwind classes resolved against BB's host theme tokens.
+**bb-plugin-git** is a [BB](https://getbb.app) plugin that shows a source-control panel across threads: status, stage/unstage/discard, commit, branches, push/pull/sync, diff viewer, and commit browsing — a graph over every ref, a linear history of the checked-out branch, and per-file history. Git feature logic is ported from **ompchamber** (`src/server/lib/fs/git-*`, `src/shared/lib/fs/*`); the plugin skeleton, rail, pinned-root flow, and UI primitives come from **bb-plugin-file-tree**. Built with TypeScript, React 19, and Tailwind classes resolved against BB's host theme tokens.
 
 ## Common Commands
 
@@ -35,7 +35,7 @@ bb plugin reload git  # Reload the plugin inside a running BB
 - **`git-status.ts`** — `readStatus`: spawns status + refs, handles detached HEAD and non-repositories.
 - **`git-actions.ts`** — The `act` whitelist. Validates paths (containment under the repo), branch names (charset, no leading `-`), hashes (hex); implements stage/unstage/revert/commit/checkout/create_branch/push/pull/sync/cherry_pick/revert_commit/reset_commit/merge_commit/rebase_commit. `cherry_pick` refuses an ancestor of HEAD and a merge commit up front, so the repo is never left mid-pick.
 - **`git-diff.ts`** — `fetchWorkingFileDiff`: working/index diff with staged/untracked/full-context handling.
-- **`git-log.ts`** — `fetchGitCommits` (paged `--numstat` log over every branch, remote-tracking branch and tag — not just HEAD — with `COMMIT_SPLIT|~|` markers) and `fetchFileDiff` (show → diff-tree → blob fallbacks).
+- **`git-log.ts`** — `fetchGitCommits` (paged `--numstat` log; `scope: "all"` walks every branch, remote-tracking branch and tag, `scope: "head"` only what the current branch contains) and `fetchFileDiff` (show → diff-tree → blob fallbacks).
 - **`git-sync.ts`** — Ahead/behind with a TTL'd background `git fetch` (60s TTL, 3s bounded wait, 15s kill deadline, process-group SIGKILL).
 - **`git-repos.ts`** — Background nested-repo discovery, cached per root (`node_modules` pruned, depth ≤ 8).
 - **`roots.ts` / `workspace.ts`** — Opaque `rootId` registry and thread/project workspace resolution (same pattern as file-tree).
@@ -54,7 +54,7 @@ bb plugin reload git  # Reload the plugin inside a running BB
 
 - **`GitRail.tsx`** — The window-wide rail: root/repo selectors, status polling (5s), action orchestration, confirm/prompt dialogs, tabs. A clicked file opens a diff side-panel tab via `openThreadPanel`, with the in-rail diff drawer as the fallback.
 - **`GitDiffPanel.tsx`** — The side-panel tab body for a diff: resolves the persisted `rootKey` to a fresh `rootId` and renders `DiffView`.
-- **`BranchToolbar.tsx`**, **`CommitBox.tsx`**, **`ChangesList.tsx`** (flat/tree rows), **`DiffView.tsx`** (unified/split/WS/full), **`HistoryView.tsx`** (the Graph tab: lane gutter + commit detail + commit actions), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`** (also registers this thread's navigator for diff tabs), **`RailResizeHandle.tsx`**.
+- **`HistoryView.tsx`** (the Graph and History tabs: one commit list with paging, search, inline commit detail and commit actions; `mode` picks lanes over every branch/remote/tag or one spine over the current branch), **`FileHistoryPanel.tsx`** (the File tab), **`GitDialogs.tsx`**, **`GitHeaderAction.tsx`** (also registers this thread's navigator for diff tabs), **`RailResizeHandle.tsx`**.
 - **`ui/`** — shadcn-style primitives copied verbatim from bb-plugin-file-tree (button, input, icon registry).
 
 ## Key Patterns
