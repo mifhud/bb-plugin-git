@@ -14,6 +14,8 @@ A right-side rail that stays open across threads. The top selectors pin a worksp
 
 **File** takes a repo-relative path and lists every commit that touched that file, newest first with paging — the GitLens file-history view. Expand a commit to copy its hash or read its files (`+n −n`), and click one to read that file's diff inside that commit.
 
+**Stash** holds the stashes of the pinned repository: push (optionally staged only), apply, pop, and drop, and each stash expands to its files.
+
 Everything runs as git subprocesses on argv arrays in the plugin server, against the primary host only. Destructive steps confirm first; git's own error words stay on screen until dismissed.
 
 ## First step
