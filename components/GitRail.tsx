@@ -299,43 +299,56 @@ export function GitRail() {
   }, [railOpen, rootId, readStatus, autoRefresh, manualTick]);
 
   /* -------------------------------- actions -------------------------- */
+  /**
+   * `stateKey` routes the error banner and the success bookkeeping to a thread
+   * other than the active one: the auto-commit that follows a generation can
+   * resolve while the user is already on another thread. The live banner and
+   * the visible view's refresh run only when that key is still active.
+   */
   const runAction = useCallback(
-    async (input: {
-      action: GitAction;
-      file?: string;
-      message?: string;
-      branch?: string;
-      /** Only read for rename_branch: the branch's new name. */
-      newBranch?: string;
-      /** Only read for delete_branch: `-D` instead of `-d`. */
-      force?: boolean;
-      stash?: string;
-      /** Only read for stash_push: stashes staged changes only (--staged). */
-      stagedOnly?: boolean;
-      /** Only read for push: publish a branch with no upstream. */
-      setUpstream?: boolean;
-    }): Promise<boolean> => {
+    async (
+      input: {
+        action: GitAction;
+        file?: string;
+        message?: string;
+        branch?: string;
+        /** Only read for rename_branch: the branch's new name. */
+        newBranch?: string;
+        /** Only read for delete_branch: `-D` instead of `-d`. */
+        force?: boolean;
+        stash?: string;
+        /** Only read for stash_push: stashes staged changes only (--staged). */
+        stagedOnly?: boolean;
+        /** Only read for push: publish a branch with no upstream. */
+        setUpstream?: boolean;
+      },
+      stateKey?: string,
+    ): Promise<boolean> => {
       if (rootId === null) return false;
+      const key = stateKey ?? currentThreadIdRef.current;
       setBusy(true);
       try {
         const result = await rpc.call("act", { rootId, repo, ...input });
+        const live = key === currentThreadIdRef.current;
         if (result.ok) {
-          setError(null);
-          const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+          if (live) setError(null);
+          const entry = threadCommitStateRef.current.get(key);
           if (entry !== undefined) entry.error = null;
-          await readStatus(false);
-          setHistoryToken((token) => token + 1);
-          setStashToken((token) => token + 1);
+          if (live) {
+            await readStatus(false);
+            setHistoryToken((token) => token + 1);
+            setStashToken((token) => token + 1);
+          }
           return true;
         }
-        setError(result.error);
-        const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+        if (live) setError(result.error);
+        const entry = threadCommitStateRef.current.get(key);
         if (entry !== undefined) entry.error = result.error;
         return false;
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
-        setError(message);
-        const entry = threadCommitStateRef.current.get(currentThreadIdRef.current);
+        if (key === currentThreadIdRef.current) setError(message);
+        const entry = threadCommitStateRef.current.get(key);
         if (entry !== undefined) entry.error = message;
         return false;
       } finally {
@@ -458,20 +471,22 @@ export function GitRail() {
             setError(null);
           }
           // Auto-commit (setting): the generated message is committed right
-          // away, without pressing Commit. Only while the same thread and
-          // repo are still active — a generation that resolved after the
-          // user switched threads just fills that thread's draft.
-          if (values?.autoCommitAfterGenerate === true && currentThreadIdRef.current === threadKey) {
-            setCommitting(true);
-            void runAction({ action: "commit", message: result.message }).then((ok) => {
-              setCommitting(false);
+          // away, without pressing Commit. It targets the repo captured when
+          // the generation started, so switching threads while the agent works
+          // no longer drops the commit — only the on-screen feedback follows
+          // the originating thread's slot.
+          if (values?.autoCommitAfterGenerate === true) {
+            const onOriginatingThread = (): boolean => currentThreadIdRef.current === threadKey;
+            if (onOriginatingThread()) setCommitting(true);
+            void runAction({ action: "commit", message: result.message }, threadKey).then((ok) => {
+              if (onOriginatingThread()) setCommitting(false);
               if (ok) {
                 const saved = threadCommitStateRef.current.get(threadKey);
                 if (saved !== undefined) {
                   saved.message = "";
                   saved.error = null;
                 }
-                if (currentThreadIdRef.current === threadKey) setMessage("");
+                if (onOriginatingThread()) setMessage("");
               }
             });
           }
