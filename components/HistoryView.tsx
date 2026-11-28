@@ -12,6 +12,7 @@ import {
   computeGraphLinks,
 } from "@/lib/git-graph";
 import { computeCherryPickState } from "@/lib/commit-actions";
+import { copyPlainText } from "@/lib/clipboard";
 import { nextSearchTarget, parseCommitsPerPage } from "@/lib/history-limit";
 import type { GitAction, GitCommit } from "../shared";
 import type { rpcContract } from "../contract";
@@ -563,12 +564,9 @@ export function HistoryView({
                           aria-label="Copy commit hash"
                           disabled={actionBusy}
                           onClick={() => {
-                            void rpc
-                              .call("copyTextToClipboard", { text: commit.hash })
-                              .then((result) => {
-                                if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
-                              })
-                              .catch(() => setError("Could not copy to the clipboard."));
+                            void copyPlainText(commit.hash).then((copied) => {
+                              if (!copied) setError("Could not copy to the clipboard.");
+                            });
                           }}
                         >
                           <Icon name="Copy" className="size-3.5" />

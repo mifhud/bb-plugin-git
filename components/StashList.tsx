@@ -3,6 +3,7 @@ import { useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/GitDialogs";
+import { copyPlainText } from "@/lib/clipboard";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileListView, type FileAction, type FileContextMenuEntry } from "@/components/FileListView";
 import type { GitAction, GitStash, GitStashFile } from "../shared";
@@ -302,9 +303,7 @@ export function StashList({
                         aria-label="Copy stash ref"
                         disabled={actionBusy}
                         onClick={() => {
-                          void rpc
-                            .call("copyTextToClipboard", { text: stash.ref })
-                            .catch(() => undefined);
+                          void copyPlainText(stash.ref);
                         }}
                       >
                         <Icon name="Copy" className="size-3.5" />

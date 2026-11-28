@@ -21,8 +21,8 @@ import { fetchStashFileDiff, fetchStashFiles, readStashList } from "./src/git-st
 import { gitSyncCount, refreshRemoteRefs } from "./src/git-sync";
 import { resolveRoot } from "./src/roots";
 import { listRootChoices, workspaceForThread } from "./src/workspace";
-import { copyTextToClipboard } from "./src/git-clipboard";
 import type { AgentSelection } from "./shared";
+
 /** How long to wait for an agent to generate a commit message before giving up. */
 const TIMEOUT_OPTIONS: Record<string, number> = {
   "30 seconds": 30_000,
@@ -259,7 +259,6 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
       const targetDir = resolveRepoDir(rootPath, input.repo);
       return fetchFileHistory(targetDir, input.file, input.limit, input.skip);
     },
-    copyTextToClipboard: ({ text }) => copyTextToClipboard(text),
     clientLog: ({ message }) => {
       bb.log.info(`client: ${message}`);
       return { ok: true };

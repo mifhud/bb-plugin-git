@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { DiffView, type DiffTarget } from "@/components/DiffView";
 import { FileListView } from "@/components/FileListView";
 import type { ViewMode } from "@/components/ChangesList";
+import { copyPlainText } from "@/lib/clipboard";
 import { parseCommitsPerPage } from "@/lib/history-limit";
 import type { GitCommit } from "../shared";
 import type { rpcContract } from "../contract";
@@ -227,12 +228,9 @@ export function FileHistoryPanel({
                         className="size-6 shrink-0 ml-auto"
                         aria-label="Copy commit hash"
                         onClick={() => {
-                          void rpc
-                            .call("copyTextToClipboard", { text: commit.hash })
-                            .then((result) => {
-                              if (!result.ok) setError(result.message ?? "Could not copy to the clipboard.");
-                            })
-                            .catch(() => setError("Could not copy to the clipboard."));
+                          void copyPlainText(commit.hash).then((copied) => {
+                            if (!copied) setError("Could not copy to the clipboard.");
+                          });
                         }}
                       >
                         <Icon name="Copy" className="size-3.5" />
